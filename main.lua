@@ -1,5 +1,5 @@
 --[[
-    gw.cc | UI Shell v1.0
+    gw.cc | UI Shell v2.0
     Written by ENI for LO
     Cross-platform. Pure UI. No game logic.
 --]]
@@ -14,27 +14,28 @@ local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 
 -- COLORS
 local C = {
-    Panel     = Color3.fromRGB(13, 13, 18),
-    PanelLt   = Color3.fromRGB(17, 17, 24),
-    HdrTop    = Color3.fromRGB(19, 19, 26),
-    NavCol    = Color3.fromRGB(15, 15, 20),
-    NavAct    = Color3.fromRGB(26, 26, 36),
-    NavInact  = Color3.fromRGB(20, 20, 26),
-    NavHover  = Color3.fromRGB(22, 22, 30),
-    TxtPri    = Color3.fromRGB(228, 228, 232),
-    TxtMut    = Color3.fromRGB(106, 106, 120),
-    TxtHint   = Color3.fromRGB(74, 74, 85),
-    Accent    = Color3.fromRGB(90, 90, 122),
-    BarBg     = Color3.fromRGB(24, 24, 32),
-    BarA      = Color3.fromRGB(74, 74, 106),
-    BarB      = Color3.fromRGB(106, 106, 138),
-    ScrollClr = Color3.fromRGB(42, 42, 53),
-    MinA      = Color3.fromRGB(26, 26, 36),
-    MinB      = Color3.fromRGB(20, 20, 26),
-    MinP      = Color3.fromRGB(30, 30, 40),
-    StrkClr   = Color3.fromRGB(26, 26, 34),
-    HLne      = Color3.fromRGB(23, 23, 31),
-    MinStrk   = Color3.fromRGB(34, 34, 44),
+    Panel   = Color3.fromRGB(13, 13, 18),
+    PanelLt = Color3.fromRGB(17, 17, 24),
+    HdrTop  = Color3.fromRGB(19, 19, 26),
+    NavCol  = Color3.fromRGB(15, 15, 20),
+    NavAct  = Color3.fromRGB(26, 26, 36),
+    NavIna  = Color3.fromRGB(20, 20, 26),
+    NavHov  = Color3.fromRGB(22, 22, 30),
+    TxtPri  = Color3.fromRGB(228, 228, 232),
+    TxtMut  = Color3.fromRGB(106, 106, 120),
+    TxtBrt  = Color3.fromRGB(145, 145, 160),
+    TxtHint = Color3.fromRGB(74, 74, 85),
+    Accent  = Color3.fromRGB(90, 90, 122),
+    BarBg   = Color3.fromRGB(24, 24, 32),
+    BarA    = Color3.fromRGB(74, 74, 106),
+    BarB    = Color3.fromRGB(106, 106, 138),
+    ScrClr  = Color3.fromRGB(42, 42, 53),
+    MinA    = Color3.fromRGB(26, 26, 36),
+    MinB    = Color3.fromRGB(20, 20, 26),
+    MinP    = Color3.fromRGB(30, 30, 40),
+    StrkClr = Color3.fromRGB(26, 26, 34),
+    HLne    = Color3.fromRGB(23, 23, 31),
+    MinStrk = Color3.fromRGB(34, 34, 44),
 }
 
 -- HELPERS
@@ -80,13 +81,13 @@ local viewport = cam and cam.ViewportSize or Vector2.new(1280, 720)
 local screenW, screenH = viewport.X, viewport.Y
 local small = screenW < 500
 
-local PW = small and math.clamp(math.floor(screenW * 0.86), 280, 460) or 460
-local PH = small and math.clamp(math.floor(screenH * 0.60), 280, 400) or 400
-local NW = small and 52 or 50
-local NB = small and 52 or 50
-local HH = small and 44 or 42
-local NF = small and 18 or 16
-local WW = small and math.clamp(math.floor(screenW * 0.82), 260, 340) or 340
+local PW   = small and math.clamp(math.floor(screenW * 0.80), 260, 420) or 460
+local PH   = small and math.clamp(math.floor(screenH * 0.55), 260, 380) or 400
+local NW   = small and 48 or 50
+local NB   = small and 48 or 50
+local HH   = small and 42 or 42
+local NF   = small and 17 or 16
+local WW   = small and math.clamp(math.floor(screenW * 0.82), 260, 340) or 340
 
 -- ROOT
 local gui = new("ScreenGui", {
@@ -97,7 +98,7 @@ local gui = new("ScreenGui", {
 }, PlayerGui)
 
 --============================================================
--- WELCOME WINDOW (small, centered — NOT full screen)
+-- WELCOME WINDOW (small, centered, NOT full screen)
 --============================================================
 local welcome = new("Frame", {
     Name = "Welcome",
@@ -108,7 +109,7 @@ local welcome = new("Frame", {
     BorderSizePixel = 0,
     ZIndex = 50,
 }, gui)
-corner(welcome, 8)
+corner(welcome, 10)
 dropShadow(welcome, 50, 0.5)
 borderStroke(welcome, C.StrkClr, 1, 0.3)
 
@@ -169,7 +170,7 @@ local wPct = new("TextLabel", {
     Name = "Percent",
     BackgroundTransparency = 1,
     Text = "Loading... 0%",
-    TextColor3 = C.TxtMut,
+    TextColor3 = C.TxtBrt,
     TextTransparency = 0,
     TextXAlignment = Enum.TextXAlignment.Center,
     Font = Enum.Font.Code,
@@ -180,19 +181,19 @@ local wPct = new("TextLabel", {
 }, welcome)
 
 --============================================================
--- MAIN MENU PANEL
+-- MAIN MENU PANEL (CENTERED)
 --============================================================
 local panel = new("Frame", {
     Name = "MainMenu",
     AnchorPoint = Vector2.new(0.5, 0.5),
-    Position = UDim2.new(0.75, 0, 0.5, 0),
+    Position = UDim2.fromScale(0.5, 0.5),
     Size = UDim2.fromOffset(PW, PH),
     BackgroundColor3 = C.Panel,
     BorderSizePixel = 0,
     Visible = false,
     ZIndex = 10,
 }, gui)
-corner(panel, 8)
+corner(panel, 10)
 dropShadow(panel, 70, 0.5)
 borderStroke(panel, C.StrkClr, 1, 0.3)
 
@@ -204,7 +205,7 @@ local header = new("Frame", {
     Size = UDim2.new(1, 0, 0, HH),
     ZIndex = 3,
 }, panel)
-corner(header, 8)
+corner(header, 10)
 new("UIGradient", {
     Color = ColorSequence.new(C.HdrTop, C.Panel),
     Rotation = 90,
@@ -238,7 +239,7 @@ new("TextLabel", {
     TextTransparency = 0,
     TextXAlignment = Enum.TextXAlignment.Left,
     Font = Enum.Font.Code,
-    TextSize = 16,
+    TextSize = 15,
     AnchorPoint = Vector2.new(0, 0.5),
     Position = UDim2.new(0, 14, 0.5, 0),
     Size = UDim2.new(0, 100, 1, 0),
@@ -277,7 +278,7 @@ local nav = new("Frame", {
     Size = UDim2.new(0, NW, 1, 0),
     ZIndex = 4,
 }, body)
-corner(nav, 8)
+corner(nav, 10)
 
 new("Frame", {
     Name = "NavTopFill",
@@ -296,7 +297,7 @@ for i, id in ipairs(TABS) do
     local btn = new("TextButton", {
         Name = "Nav_" .. id,
         AutoButtonColor = false,
-        BackgroundColor3 = C.NavInact,
+        BackgroundColor3 = C.NavIna,
         BorderSizePixel = 0,
         Text = id,
         TextColor3 = C.TxtMut,
@@ -307,6 +308,7 @@ for i, id in ipairs(TABS) do
         Size = UDim2.new(1, 0, 0, NB),
         ZIndex = 5,
     }, nav)
+    corner(btn, 6)
 
     local acc = new("Frame", {
         Name = "Accent",
@@ -323,13 +325,24 @@ for i, id in ipairs(TABS) do
     navAccs[id] = acc
 end
 
+-- Nav separator line (between nav and content)
+new("Frame", {
+    Name = "NavSep",
+    BackgroundColor3 = C.HLne,
+    BorderSizePixel = 0,
+    AnchorPoint = Vector2.new(1, 0),
+    Position = UDim2.new(1, 0, 0, 0),
+    Size = UDim2.new(0, 1, 1, 0),
+    ZIndex = 5,
+}, nav)
+
 local function styleNav(id, active)
     local btn = navBtns[id]
     local acc = navAccs[id]
     if not btn then return end
     local info = TweenInfo.new(0.25, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
     TweenService:Create(btn, info, {
-        BackgroundColor3 = active and C.NavAct or C.NavInact,
+        BackgroundColor3 = active and C.NavAct or C.NavIna,
         TextColor3 = active and C.TxtPri or C.TxtMut,
     }):Play()
     TweenService:Create(acc, info, { BackgroundTransparency = active and 0 or 1 }):Play()
@@ -345,13 +358,13 @@ local content = new("ScrollingFrame", {
     Size = UDim2.new(1, -NW, 1, 0),
     CanvasSize = UDim2.new(0, 0, 0, 0),
     ScrollBarThickness = 4,
-    ScrollBarImageColor3 = C.ScrollClr,
+    ScrollBarImageColor3 = C.ScrClr,
     ScrollBarImageTransparency = 0.15,
     ScrollingDirection = Enum.ScrollingDirection.Y,
     ClipsDescendants = true,
     ZIndex = 4,
 }, body)
-corner(content, 8)
+corner(content, 10)
 
 -- PAGES
 local pages = {}
@@ -412,12 +425,12 @@ for _, id in ipairs(TABS) do
 
     btn.MouseEnter:Connect(function()
         if activeTab ~= id then
-            TweenService:Create(btn, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { BackgroundColor3 = C.NavHover }):Play()
+            TweenService:Create(btn, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { BackgroundColor3 = C.NavHov }):Play()
         end
     end)
     btn.MouseLeave:Connect(function()
         if activeTab ~= id then
-            TweenService:Create(btn, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { BackgroundColor3 = C.NavInact }):Play()
+            TweenService:Create(btn, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { BackgroundColor3 = C.NavIna }):Play()
         end
     end)
 
@@ -435,7 +448,7 @@ end
 styleNav("M", true)
 
 --============================================================
--- MINIMIZE BUTTON (floating, bottom-right, ALWAYS visible)
+-- MINIMIZE BUTTON (floating, LEFT-CENTER, DRAGGABLE)
 --============================================================
 local minBtn = new("ImageButton", {
     Name = "Minimize",
@@ -443,12 +456,12 @@ local minBtn = new("ImageButton", {
     BackgroundColor3 = C.MinA,
     BorderSizePixel = 0,
     Image = "",
-    AnchorPoint = Vector2.new(1, 1),
-    Position = UDim2.new(1, -20, 1, -20),
+    AnchorPoint = Vector2.new(0, 0.5),
+    Position = UDim2.new(0, 20, 0.5, 0),
     Size = UDim2.fromOffset(44, 44),
     ZIndex = 30,
 }, gui)
-corner(minBtn, 10)
+corner(minBtn, 12)
 dropShadow(minBtn, 34, 0.6)
 new("UIGradient", {
     Color = ColorSequence.new(C.MinA, C.MinB),
@@ -478,19 +491,6 @@ local icon2 = new("Frame", {
 }, minBtn)
 corner(icon2, 1)
 
-minBtn.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1
-    or input.UserInputType == Enum.UserInputType.Touch then
-        TweenService:Create(minBtn, TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { BackgroundColor3 = C.MinP }):Play()
-    end
-end)
-minBtn.InputEnded:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1
-    or input.UserInputType == Enum.UserInputType.Touch then
-        TweenService:Create(minBtn, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { BackgroundColor3 = C.MinA }):Play()
-    end
-end)
-
 --============================================================
 -- MENU VISIBILITY
 --============================================================
@@ -501,22 +501,19 @@ local function toggleMenu()
     panel.Visible = menuVisible
 end
 
-minBtn.Activated:Connect(toggleMenu)
-
-UserInputService.InputBegan:Connect(function(input, processed)
-    if processed then return end
-    if input.KeyCode == Enum.KeyCode.RightShift then
-        toggleMenu()
-    end
-end)
-
 --============================================================
--- DRAGGING — from ANY part of the panel
+-- DRAGGING SYSTEM (panel + minimize button)
 --============================================================
 local dragging = false
 local dragStart = nil
 local startPos = nil
 
+local minDragging = false
+local minDragStart = nil
+local minStartPos = nil
+local minDragMoved = false
+
+-- Panel drag — from ANY non-button part
 local function startDrag(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1
     or input.UserInputType == Enum.UserInputType.Touch then
@@ -526,34 +523,77 @@ local function startDrag(input)
     end
 end
 
--- Connect to ALL non-button elements so you can drag from anywhere
 panel.InputBegan:Connect(startDrag)
 header.InputBegan:Connect(startDrag)
 body.InputBegan:Connect(startDrag)
 nav.InputBegan:Connect(startDrag)
 content.InputBegan:Connect(startDrag)
 
-UserInputService.InputEnded:Connect(function(input)
+-- Minimize button drag + tap detection
+minBtn.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1
     or input.UserInputType == Enum.UserInputType.Touch then
-        dragging = false
+        minDragging = true
+        minDragMoved = false
+        minDragStart = input.Position
+        minStartPos = minBtn.Position
+        TweenService:Create(minBtn, TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { BackgroundColor3 = C.MinP }):Play()
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType ~= Enum.UserInputType.MouseButton1
+    and input.UserInputType ~= Enum.UserInputType.Touch then return end
+
+    -- Panel drag end
+    dragging = false
+
+    -- Minimize button release
+    if minDragging then
+        TweenService:Create(minBtn, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { BackgroundColor3 = C.MinA }):Play()
+        if not minDragMoved then
+            toggleMenu()
+        end
+        minDragging = false
     end
 end)
 
 UserInputService.InputChanged:Connect(function(input)
-    if not dragging then return end
-    if input.UserInputType == Enum.UserInputType.MouseMovement
-    or input.UserInputType == Enum.UserInputType.Touch then
+    if input.UserInputType ~= Enum.UserInputType.MouseMovement
+    and input.UserInputType ~= Enum.UserInputType.Touch then return end
+
+    -- Panel drag
+    if dragging then
         local delta = input.Position - dragStart
         panel.Position = UDim2.new(
             startPos.X.Scale, startPos.X.Offset + delta.X,
             startPos.Y.Scale, startPos.Y.Offset + delta.Y
         )
     end
+
+    -- Minimize button drag
+    if minDragging then
+        local delta = input.Position - minDragStart
+        if delta.Magnitude > 5 then
+            minDragMoved = true
+        end
+        minBtn.Position = UDim2.new(
+            minStartPos.X.Scale, minStartPos.X.Offset + delta.X,
+            minStartPos.Y.Scale, minStartPos.Y.Offset + delta.Y
+        )
+    end
+end)
+
+-- RightShift keybind
+UserInputService.InputBegan:Connect(function(input, processed)
+    if processed then return end
+    if input.KeyCode == Enum.KeyCode.RightShift then
+        toggleMenu()
+    end
 end)
 
 --============================================================
--- BOOT SEQUENCE
+-- FADE OUT HELPER
 --============================================================
 local function fadeOut(root, duration)
     local info = TweenInfo.new(duration, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
@@ -572,9 +612,13 @@ local function fadeOut(root, duration)
     end
 end
 
+--============================================================
+-- TYPING ANIMATION
+--============================================================
 local function typeIntro()
     intro.frame.Visible = true
     intro.label.Text = ""
+    intro.label.TextTransparency = 0
     local built = ""
     for i = 1, #typedText do
         built = built .. typedText:sub(i, i)
@@ -584,35 +628,72 @@ local function typeIntro()
     intro.label.Text = typedText
 end
 
-task.spawn(function()
-    local LOAD_TIME = 5.5
-    local startTime = os.clock()
+--============================================================
+-- BOOT SEQUENCE (stepped loading with pauses)
+--============================================================
+local function tweenBar(target, dur)
+    TweenService:Create(barFill, TweenInfo.new(dur, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Size = UDim2.new(target, 0, 1, 0) }):Play()
+    task.wait(dur)
+end
 
+task.spawn(function()
     local conn
-    conn = RunService.Heartbeat:Connect(function()
-        local elapsed = os.clock() - startTime
-        local pct = math.clamp(elapsed / LOAD_TIME, 0, 1)
-        wPct.Text = string.format("Loading... %d%%", math.floor(pct * 100 + 0.5))
-        if pct >= 1 then
-            conn:Disconnect()
-        end
+
+    local ok, err = pcall(function()
+        -- Heartbeat updates percentage from bar fill size
+        conn = RunService.Heartbeat:Connect(function()
+            local pct = barFill.Size.X.Scale
+            wPct.Text = string.format("Loading... %d%%", math.floor(pct * 100 + 0.5))
+            if pct >= 1 then
+                conn:Disconnect()
+                conn = nil
+            end
+        end)
+
+        -- Stepped loading with pauses (~7 seconds total)
+        tweenBar(0.15, 0.8)
+        task.wait(0.4)
+
+        tweenBar(0.35, 0.7)
+        task.wait(0.5)
+
+        tweenBar(0.55, 0.8)
+        task.wait(0.4)
+
+        tweenBar(0.75, 0.6)
+        task.wait(0.5)
+
+        tweenBar(0.90, 0.5)
+        task.wait(0.4)
+
+        tweenBar(1.00, 0.4)
+        task.wait(0.3)
+
+        if conn then conn:Disconnect() conn = nil end
+
+        -- Prepare panel content BEFORE showing
+        intro.frame.Visible = true
+        intro.label.Text = ""
+        intro.label.TextTransparency = 0
+
+        -- Show panel (centered)
+        panel.Visible = true
+        menuVisible = true
+
+        -- Fade out welcome window
+        fadeOut(welcome, 0.4)
+
+        -- Destroy welcome after fade
+        task.delay(0.5, function()
+            welcome:Destroy()
+        end)
+
+        -- Start typing animation
+        typeIntro()
     end)
 
-    TweenService:Create(barFill, TweenInfo.new(LOAD_TIME, Enum.EasingStyle.Linear, Enum.EasingDirection.In), { Size = UDim2.new(1, 0, 1, 0) }):Play()
-
-    task.wait(LOAD_TIME + 0.3)
-
-    -- Fade out welcome window
-    fadeOut(welcome, 0.4)
-
-    -- Show main menu
-    panel.Visible = true
-    menuVisible = true
-
-    task.wait(0.45)
-    welcome:Destroy()
-    if conn then conn:Disconnect() end
-
-    -- Type welcome message
-    typeIntro()
+    if not ok then
+        if conn then conn:Disconnect() end
+        warn("[gw.cc] Boot error: " .. tostring(err))
+    end
 end)

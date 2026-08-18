@@ -1,5 +1,5 @@
 --[[
-    gw.cc | UI Shell v2.0
+    gw.cc | UI Shell v3.0
     Written by ENI for LO
     Cross-platform. Pure UI. No game logic.
 --]]
@@ -89,16 +89,17 @@ local HH   = small and 42 or 42
 local NF   = small and 17 or 16
 local WW   = small and math.clamp(math.floor(screenW * 0.82), 260, 340) or 340
 
--- ROOT
+-- ROOT — ZIndexBehavior.Sibling fixes the empty content bug!
 local gui = new("ScreenGui", {
     Name = "gwcc_UI",
     ResetOnSpawn = false,
     IgnoreGuiInset = true,
     DisplayOrder = 9999,
+    ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
 }, PlayerGui)
 
 --============================================================
--- WELCOME WINDOW (small, centered, NOT full screen)
+-- WELCOME WINDOW
 --============================================================
 local welcome = new("Frame", {
     Name = "Welcome",
@@ -124,7 +125,7 @@ local wTitle = new("TextLabel", {
     TextSize = 18,
     Size = UDim2.new(1, 0, 0, 24),
     Position = UDim2.new(0, 0, 0, 24),
-    ZIndex = 51,
+    ZIndex = 1,
 }, welcome)
 
 local wCredit = new("TextLabel", {
@@ -138,7 +139,7 @@ local wCredit = new("TextLabel", {
     TextSize = 12,
     Size = UDim2.new(1, 0, 0, 16),
     Position = UDim2.new(0, 0, 0, 52),
-    ZIndex = 51,
+    ZIndex = 1,
 }, welcome)
 
 local barBack = new("Frame", {
@@ -149,7 +150,7 @@ local barBack = new("Frame", {
     Position = UDim2.new(0.5, 0, 0, 84),
     Size = UDim2.new(0, WW - 60, 0, 6),
     ClipsDescendants = true,
-    ZIndex = 51,
+    ZIndex = 1,
 }, welcome)
 corner(barBack, 3)
 
@@ -158,7 +159,7 @@ local barFill = new("Frame", {
     BackgroundColor3 = C.BarA,
     BorderSizePixel = 0,
     Size = UDim2.new(0, 0, 1, 0),
-    ZIndex = 52,
+    ZIndex = 2,
 }, barBack)
 corner(barFill, 3)
 new("UIGradient", {
@@ -177,7 +178,7 @@ local wPct = new("TextLabel", {
     TextSize = 11,
     Size = UDim2.new(1, 0, 0, 14),
     Position = UDim2.new(0, 0, 0, 100),
-    ZIndex = 51,
+    ZIndex = 1,
 }, welcome)
 
 --============================================================
@@ -203,7 +204,7 @@ local header = new("Frame", {
     BackgroundColor3 = C.PanelLt,
     BorderSizePixel = 0,
     Size = UDim2.new(1, 0, 0, HH),
-    ZIndex = 3,
+    ZIndex = 1,
 }, panel)
 corner(header, 10)
 new("UIGradient", {
@@ -218,7 +219,7 @@ new("Frame", {
     AnchorPoint = Vector2.new(0, 1),
     Position = UDim2.new(0, 0, 1, 0),
     Size = UDim2.new(1, 0, 0, 8),
-    ZIndex = 2,
+    ZIndex = 1,
 }, header)
 
 new("Frame", {
@@ -228,7 +229,7 @@ new("Frame", {
     AnchorPoint = Vector2.new(0, 1),
     Position = UDim2.new(0, 0, 1, 0),
     Size = UDim2.new(1, 0, 0, 1),
-    ZIndex = 4,
+    ZIndex = 2,
 }, header)
 
 new("TextLabel", {
@@ -243,7 +244,7 @@ new("TextLabel", {
     AnchorPoint = Vector2.new(0, 0.5),
     Position = UDim2.new(0, 14, 0.5, 0),
     Size = UDim2.new(0, 100, 1, 0),
-    ZIndex = 5,
+    ZIndex = 3,
 }, header)
 
 new("TextLabel", {
@@ -258,7 +259,7 @@ new("TextLabel", {
     AnchorPoint = Vector2.new(1, 0.5),
     Position = UDim2.new(1, -14, 0.5, 0),
     Size = UDim2.new(0, 160, 1, 0),
-    ZIndex = 5,
+    ZIndex = 3,
 }, header)
 
 -- BODY
@@ -267,7 +268,7 @@ local body = new("Frame", {
     BackgroundTransparency = 1,
     Position = UDim2.new(0, 0, 0, HH),
     Size = UDim2.new(1, 0, 1, -HH),
-    ZIndex = 3,
+    ZIndex = 1,
 }, panel)
 
 -- NAV COLUMN
@@ -276,7 +277,7 @@ local nav = new("Frame", {
     BackgroundColor3 = C.NavCol,
     BorderSizePixel = 0,
     Size = UDim2.new(0, NW, 1, 0),
-    ZIndex = 4,
+    ZIndex = 1,
 }, body)
 corner(nav, 10)
 
@@ -285,7 +286,7 @@ new("Frame", {
     BackgroundColor3 = C.NavCol,
     BorderSizePixel = 0,
     Size = UDim2.new(1, 0, 0, 8),
-    ZIndex = 4,
+    ZIndex = 1,
 }, nav)
 
 local TABS = { "M", "V", "C" }
@@ -306,7 +307,7 @@ for i, id in ipairs(TABS) do
         TextSize = NF,
         Position = UDim2.new(0, 0, 0, 8 + (i - 1) * NB),
         Size = UDim2.new(1, 0, 0, NB),
-        ZIndex = 5,
+        ZIndex = 2,
     }, nav)
     corner(btn, 6)
 
@@ -317,7 +318,7 @@ for i, id in ipairs(TABS) do
         BorderSizePixel = 0,
         Size = UDim2.new(0, 3, 1, -16),
         Position = UDim2.new(0, 0, 0, 8),
-        ZIndex = 6,
+        ZIndex = 3,
     }, btn)
     corner(acc, 2)
 
@@ -325,7 +326,7 @@ for i, id in ipairs(TABS) do
     navAccs[id] = acc
 end
 
--- Nav separator line (between nav and content)
+-- Nav separator (between nav and content)
 new("Frame", {
     Name = "NavSep",
     BackgroundColor3 = C.HLne,
@@ -333,7 +334,7 @@ new("Frame", {
     AnchorPoint = Vector2.new(1, 0),
     Position = UDim2.new(1, 0, 0, 0),
     Size = UDim2.new(0, 1, 1, 0),
-    ZIndex = 5,
+    ZIndex = 2,
 }, nav)
 
 local function styleNav(id, active)
@@ -348,78 +349,46 @@ local function styleNav(id, active)
     TweenService:Create(acc, info, { BackgroundTransparency = active and 0 or 1 }):Play()
 end
 
--- CONTENT AREA
-local content = new("ScrollingFrame", {
+--============================================================
+-- CONTENT AREA (SIMPLIFIED — single TextLabel, no pages!)
+--============================================================
+local content = new("Frame", {
     Name = "Content",
     BackgroundColor3 = C.Panel,
     BackgroundTransparency = 0,
     BorderSizePixel = 0,
     Position = UDim2.new(0, NW, 0, 0),
     Size = UDim2.new(1, -NW, 1, 0),
-    CanvasSize = UDim2.new(0, 0, 0, 0),
-    ScrollBarThickness = 4,
-    ScrollBarImageColor3 = C.ScrClr,
-    ScrollBarImageTransparency = 0.15,
-    ScrollingDirection = Enum.ScrollingDirection.Y,
-    ClipsDescendants = true,
-    ZIndex = 4,
+    ZIndex = 1,
 }, body)
 corner(content, 10)
 
--- PAGES
-local pages = {}
+local contentLabel = new("TextLabel", {
+    Name = "ContentLabel",
+    BackgroundTransparency = 1,
+    Text = "",
+    TextColor3 = C.TxtPri,
+    TextTransparency = 0,
+    TextXAlignment = Enum.TextXAlignment.Center,
+    TextYAlignment = Enum.TextYAlignment.Center,
+    Font = Enum.Font.Code,
+    TextSize = 15,
+    AnchorPoint = Vector2.new(0.5, 0.5),
+    Position = UDim2.fromScale(0.5, 0.5),
+    Size = UDim2.new(1, -20, 0, 24),
+    ZIndex = 2,
+}, content)
 
-local function makePage(name, text)
-    local page = new("Frame", {
-        Name = "Page_" .. name,
-        BackgroundTransparency = 1,
-        Size = UDim2.new(1, 0, 1, 0),
-        Visible = false,
-        ZIndex = 5,
-    }, content)
-
-    local label = new("TextLabel", {
-        Name = "Label",
-        BackgroundTransparency = 1,
-        Text = text,
-        TextColor3 = C.TxtPri,
-        TextTransparency = 0,
-        TextXAlignment = Enum.TextXAlignment.Center,
-        TextYAlignment = Enum.TextYAlignment.Center,
-        Font = Enum.Font.Code,
-        TextSize = 15,
-        AnchorPoint = Vector2.new(0.5, 0.5),
-        Position = UDim2.fromScale(0.5, 0.5),
-        Size = UDim2.new(1, -20, 0, 24),
-        ZIndex = 6,
-    }, page)
-
-    pages[name] = { frame = page, label = label }
-    return pages[name]
-end
-
-local rawName = LocalPlayer.DisplayName
-if not rawName or rawName == "" then rawName = LocalPlayer.Name end
-rawName = tostring(rawName):gsub("[^%w%s_%.%-]", "")
-local typedText = "Welcome, " .. rawName .. "!"
-
-local intro = makePage("Intro", "")
-makePage("M", TAB_NAMES.M)
-makePage("V", TAB_NAMES.V)
-makePage("C", TAB_NAMES.C)
-
-local currentPage = intro
+--============================================================
+-- STATE
+--============================================================
 local activeTab = "M"
 local firstLoad = true
+local typing = false
 
-local function showPage(target)
-    if currentPage == target then return end
-    currentPage.frame.Visible = false
-    currentPage = target
-    currentPage.frame.Visible = true
-end
-
+--============================================================
 -- NAV EVENTS
+--============================================================
 for _, id in ipairs(TABS) do
     local btn = navBtns[id]
 
@@ -439,9 +408,10 @@ for _, id in ipairs(TABS) do
         local prev = activeTab
         activeTab = id
         firstLoad = false
+        typing = false  -- stop typing animation if running
         if prev ~= id then styleNav(prev, false) end
         styleNav(id, true)
-        showPage(pages[id])
+        contentLabel.Text = TAB_NAMES[id]
     end)
 end
 
@@ -476,7 +446,7 @@ local icon1 = new("Frame", {
     AnchorPoint = Vector2.new(0.5, 0.5),
     Position = UDim2.new(0.5, 0, 0.5, -4),
     Size = UDim2.fromOffset(18, 2),
-    ZIndex = 31,
+    ZIndex = 1,
 }, minBtn)
 corner(icon1, 1)
 
@@ -487,7 +457,7 @@ local icon2 = new("Frame", {
     AnchorPoint = Vector2.new(0.5, 0.5),
     Position = UDim2.new(0.5, 0, 0.5, 4),
     Size = UDim2.fromOffset(12, 2),
-    ZIndex = 31,
+    ZIndex = 1,
 }, minBtn)
 corner(icon2, 1)
 
@@ -502,7 +472,7 @@ local function toggleMenu()
 end
 
 --============================================================
--- DRAGGING SYSTEM (panel + minimize button)
+-- DRAGGING (panel from anywhere + minimize button)
 --============================================================
 local dragging = false
 local dragStart = nil
@@ -513,7 +483,6 @@ local minDragStart = nil
 local minStartPos = nil
 local minDragMoved = false
 
--- Panel drag — from ANY non-button part
 local function startDrag(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1
     or input.UserInputType == Enum.UserInputType.Touch then
@@ -529,7 +498,6 @@ body.InputBegan:Connect(startDrag)
 nav.InputBegan:Connect(startDrag)
 content.InputBegan:Connect(startDrag)
 
--- Minimize button drag + tap detection
 minBtn.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1
     or input.UserInputType == Enum.UserInputType.Touch then
@@ -545,10 +513,8 @@ UserInputService.InputEnded:Connect(function(input)
     if input.UserInputType ~= Enum.UserInputType.MouseButton1
     and input.UserInputType ~= Enum.UserInputType.Touch then return end
 
-    -- Panel drag end
     dragging = false
 
-    -- Minimize button release
     if minDragging then
         TweenService:Create(minBtn, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { BackgroundColor3 = C.MinA }):Play()
         if not minDragMoved then
@@ -562,7 +528,6 @@ UserInputService.InputChanged:Connect(function(input)
     if input.UserInputType ~= Enum.UserInputType.MouseMovement
     and input.UserInputType ~= Enum.UserInputType.Touch then return end
 
-    -- Panel drag
     if dragging then
         local delta = input.Position - dragStart
         panel.Position = UDim2.new(
@@ -571,7 +536,6 @@ UserInputService.InputChanged:Connect(function(input)
         )
     end
 
-    -- Minimize button drag
     if minDragging then
         local delta = input.Position - minDragStart
         if delta.Magnitude > 5 then
@@ -584,7 +548,6 @@ UserInputService.InputChanged:Connect(function(input)
     end
 end)
 
--- RightShift keybind
 UserInputService.InputBegan:Connect(function(input, processed)
     if processed then return end
     if input.KeyCode == Enum.KeyCode.RightShift then
@@ -593,7 +556,7 @@ UserInputService.InputBegan:Connect(function(input, processed)
 end)
 
 --============================================================
--- FADE OUT HELPER
+-- FADE OUT
 --============================================================
 local function fadeOut(root, duration)
     local info = TweenInfo.new(duration, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
@@ -613,23 +576,28 @@ local function fadeOut(root, duration)
 end
 
 --============================================================
--- TYPING ANIMATION
+-- TYPING ANIMATION (writes directly to contentLabel)
 --============================================================
 local function typeIntro()
-    intro.frame.Visible = true
-    intro.label.Text = ""
-    intro.label.TextTransparency = 0
+    typing = true
+    contentLabel.Text = ""
+    local rawName = LocalPlayer.DisplayName
+    if not rawName or rawName == "" then rawName = LocalPlayer.Name end
+    rawName = tostring(rawName):gsub("[^%w%s_%.%-]", "")
+    local fullText = "Welcome, " .. rawName .. "!"
     local built = ""
-    for i = 1, #typedText do
-        built = built .. typedText:sub(i, i)
-        intro.label.Text = built
+    for i = 1, #fullText do
+        if not typing then return end  -- stop if user clicked a tab
+        built = built .. fullText:sub(i, i)
+        contentLabel.Text = built
         task.wait(0.06)
     end
-    intro.label.Text = typedText
+    contentLabel.Text = fullText
+    typing = false
 end
 
 --============================================================
--- BOOT SEQUENCE (stepped loading with pauses)
+-- BOOT SEQUENCE (stepped loading with pauses, ~7 sec)
 --============================================================
 local function tweenBar(target, dur)
     TweenService:Create(barFill, TweenInfo.new(dur, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Size = UDim2.new(target, 0, 1, 0) }):Play()
@@ -640,7 +608,7 @@ task.spawn(function()
     local conn
 
     local ok, err = pcall(function()
-        -- Heartbeat updates percentage from bar fill size
+        -- Heartbeat: update percentage from bar fill size
         conn = RunService.Heartbeat:Connect(function()
             local pct = barFill.Size.X.Scale
             wPct.Text = string.format("Loading... %d%%", math.floor(pct * 100 + 0.5))
@@ -650,7 +618,7 @@ task.spawn(function()
             end
         end)
 
-        -- Stepped loading with pauses (~7 seconds total)
+        -- Stepped loading with pauses
         tweenBar(0.15, 0.8)
         task.wait(0.4)
 
@@ -671,16 +639,11 @@ task.spawn(function()
 
         if conn then conn:Disconnect() conn = nil end
 
-        -- Prepare panel content BEFORE showing
-        intro.frame.Visible = true
-        intro.label.Text = ""
-        intro.label.TextTransparency = 0
-
-        -- Show panel (centered)
+        -- Show panel
         panel.Visible = true
         menuVisible = true
 
-        -- Fade out welcome window
+        -- Fade out welcome
         fadeOut(welcome, 0.4)
 
         -- Destroy welcome after fade
@@ -688,7 +651,7 @@ task.spawn(function()
             welcome:Destroy()
         end)
 
-        -- Start typing animation
+        -- Type welcome message into content area
         typeIntro()
     end)
 

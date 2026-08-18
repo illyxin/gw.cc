@@ -1,231 +1,660 @@
-Create a custom Roblox Luau UI library — an in-game menu interface framework. This is a pure UI implementation with no game logic or functional features. The script should create a visually polished, professionally animated interface that works cross-platform (PC and Mobile). Below is the complete specification.
+--[[
+    gw.cc  |  UI SHELL v1.0
+    Pure interface framework. No game logic, no functional features.
+--]]
 
-## TECHNICAL SETUP
-- Language: Luau (Roblox Lua)
-- ScreenGui properties: ResetOnSpawn = false, IgnoreGuiInset = true, DisplayOrder = 9999
-- All UI elements created programmatically via Instance.new()
-- All animations via TweenService
-- Input handling via UserInputService and ContextActionService
-- Platform detection: UserInputService.TouchEnabled (mobile), UserInputService.MouseEnabled (PC)
+--// SERVICES
+local Players               = game:GetService("Players")
+local TweenService          = game:GetService("TweenService")
+local UserInputService      = game:GetService("UserInputService")
+local ContextActionService  = game:GetService("ContextActionService")
+local RunService            = game:GetService("RunService")
 
-## FONT
-- JetBrains Mono throughout the entire interface
-- Load via FontFace.new() with the appropriate asset ID, or set Font property on all TextLabels/TextButtons
-- Font sizes:
-  - Branding/title: 18-20px
-  - Body text: 14-15px
-  - Side navigation buttons: 16-18px
-  - Subtitle/credits: 12-13px
+local LocalPlayer = Players.LocalPlayer
+local PlayerGui   = LocalPlayer:WaitForChild("PlayerGui")
 
-## COLOR SCHEME
-- Panel background: #0D0D12 (deep near-black charcoal) — SOLID, NOT transparent, NOT semi-transparent
-- Header background: slightly differentiated, #111118 or subtle gradient from #13131A to #0D0D12
-- Side navigation active button: #1A1A24 with accent border (left edge, 2-3px, color #4A4A5E or similar muted accent)
-- Side navigation inactive button: transparent or #14141A
-- Side navigation hover (PC): #16161E
-- Text primary: #E4E4E8 (off-white)
-- Text secondary/muted: #6A6A78 (gray)
-- Accent: #5A5A7A (muted, not neon)
-- Loading bar background: #181820
-- Loading bar fill: gradient from #4A4A6A to #6A6A8A
-- All colors should feel premium, muted, sophisticated — NOT bright, NOT neon, NOT flashy
+--// THEME
+local T = {
+    Panel        = Color3.fromHex("0D0D12"),
+    Header       = Color3.fromHex("111118"),
+    HeaderTop    = Color3.fromHex("13131A"),
+    NavColumn    = Color3.fromHex("0F0F14"),
+    NavActive    = Color3.fromHex("1A1A24"),
+    NavInactive  = Color3.fromHex("14141A"),
+    NavHover     = Color3.fromHex("16161E"),
+    TextPrimary  = Color3.fromHex("E4E4E8"),
+    TextMuted    = Color3.fromHex("6A6A78"),
+    TextHint     = Color3.fromHex("4A4A55"),
+    Accent       = Color3.fromHex("5A5A7A"),
+    BarBack      = Color3.fromHex("181820"),
+    BarFillA     = Color3.fromHex("4A4A6A"),
+    BarFillB     = Color3.fromHex("6A6A8A"),
+    ScrollBar    = Color3.fromHex("2A2A35"),
+    MinA         = Color3.fromHex("1A1A24"),
+    MinB         = Color3.fromHex("14141A"),
+    MinPressed   = Color3.fromHex("1E1E28"),
+}
 
-## DESIGN REFERENCE
-The interface aesthetic is inspired by a premium in-game utility panel with the following visual characteristics:
-- A solid, opaque dark panel positioned in the game viewport (the game scene is visible AROUND the panel, NOT through it)
-- Clean, minimal layout with sharp or very slightly rounded corners (CornerRadius 4-6px)
-- Top of panel: branding text (single short label, monospace font)
-- Left column below branding: three small vertical navigation buttons, each containing a single uppercase letter
-- Right of navigation: main content area
-- Overall feel: modern, sleek, professional, understated
-- Subtle drop shadow behind the panel for depth (UIStroke or Image with shadow gradient)
+--// PLATFORM
+local IS_TOUCH  = UserInputService.TouchEnabled
+local IS_MOUSE  = UserInputService.MouseEnabled
+local IS_MOBILE = IS_TOUCH and not IS_MOUSE
+local IS_PC     = IS_MOUSE
 
-## COMPONENT 1: WELCOME / LOADING SCREEN
+--// EASING
+local function TI(t, style, dir)
+    return TweenInfo.new(t, style or Enum.EasingStyle.Quint, dir or Enum.EasingDirection.Out)
+end
+local EASE_IN  = Enum.EasingDirection.In
+local QUINT    = Enum.EasingStyle.Quint
+local QUAD     = Enum.EasingStyle.Quad
+local LINEAR   = Enum.EasingStyle.Linear
 
-This is a full-screen overlay shown when the script first runs. It is NOT draggable.
+--// HELPERS
+local function new(class, props, parent)
+    local inst = Instance.new(class)
+    for k, v in pairs(props or {}) do
+        inst[k] = v
+    end
+    if parent then inst.Parent = parent end
+    return inst
+end
 
-### Layout (all elements vertically centered on screen):
-1. **"Welcome to gw.cc"** — large text, JetBrains Mono, color #E4E4E8, centered horizontally
-2. **"by illyxin"** — smaller text below the title, color #6A6A78, centered, positioned ~8-10px below title
-3. **Loading progress bar** — positioned ~20-25px below "by illyxin":
-   - Container: rounded rectangle, ~320px wide, ~6-8px tall, background #181820, CornerRadius 4px
-   - Fill: inner rectangle starting at width 0, height matching container, background gradient (#4A4A6A → #6A6A8A), CornerRadius 4px
-   - The fill animates from 0% to 100% width over approximately 5-6 seconds using TweenService
-   - Optional: small percentage text below the bar (e.g., "Loading... 42%"), JetBrains Mono 11px, color #6A6A78
+local function font(label, size, weight)
+    label.TextSize = size
+    local ok = pcall(function()
+        label.FontFace = Font.new("rbxasset://fonts/families/JetBrainsMono.json", weight or Enum.FontWeight.Regular, Enum.FontStyle.Normal)
+    end)
+    if not ok then
+        label.Font = Enum.Font.Code
+    end
+    return label
+end
 
-### Transition to Main Menu:
-- After the loading bar reaches 100%, wait ~0.3 seconds
-- Fade out the entire welcome screen (TweenService, transparency 0 → 1, ~0.6-0.8 seconds, EasingStyle.Quint, EasingDirection.In)
-- Simultaneously or immediately after, fade in the Main Menu (transparency 1 → 0, same duration)
-- Destroy or set Visible = false on the welcome screen after transition completes
+local function corner(parent, r)
+    return new("UICorner", { CornerRadius = UDim.new(0, r or 6) }, parent)
+end
 
-## COMPONENT 2: MAIN MENU
+local function shadow(parent, spread, alpha)
+    return new("ImageLabel", {
+        Name = "Shadow",
+        BackgroundTransparency = 1,
+        Image = "rbxassetid://6014261993",
+        ImageColor3 = Color3.new(0, 0, 0),
+        ImageTransparency = alpha or 0.55,
+        ScaleType = Enum.ScaleType.Slice,
+        SliceCenter = Rect.new(49, 49, 450, 450),
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.fromScale(0.5, 0.5),
+        Size = UDim2.new(1, spread or 60, 1, spread or 60),
+        ZIndex = 0,
+    }, parent)
+end
 
-The main menu is the primary interface panel. It IS draggable.
+-- transparency snapshot / fade system
+local function snapshot(root)
+    local snap = {}
+    local list = root:GetDescendants()
+    table.insert(list, 1, root)
+    for _, o in ipairs(list) do
+        if o:IsA("GuiObject") then
+            table.insert(snap, { o, "BackgroundTransparency", o.BackgroundTransparency })
+        end
+        if o:IsA("TextLabel") or o:IsA("TextButton") or o:IsA("TextBox") then
+            table.insert(snap, { o, "TextTransparency", o.TextTransparency })
+        end
+        if o:IsA("ImageLabel") or o:IsA("ImageButton") then
+            table.insert(snap, { o, "ImageTransparency", o.ImageTransparency })
+        end
+        if o:IsA("UIStroke") then
+            table.insert(snap, { o, "Transparency", o.Transparency })
+        end
+    end
+    return snap
+end
 
-### Panel Properties:
-- Size: approximately 460px wide × 400px tall on PC; scale proportionally for mobile (use scale/offset mix or detect screen size)
-- Position: initially center-right of screen
-- Background: #0D0D12, solid (Transparency = 0), CornerRadius 6px
-- UIStroke or shadow for depth: subtle dark drop shadow
+local function applySnap(snap, value)
+    for _, e in ipairs(snap) do
+        e[1][e[2]] = value or e[3]
+    end
+end
 
-### Panel Structure (top to bottom):
+local function tweenSnap(snap, info, toHidden)
+    for _, e in ipairs(snap) do
+        TweenService:Create(e[1], info, { [e[2]] = toHidden and 1 or e[3] }):Play()
+    end
+end
 
-#### A) Header / Top Bar
-- Height: ~40-45px
-- Background: #111118 or subtle gradient
-- Contains:
-  1. **"gw.cc"** branding text — JetBrains Mono, 18px, color #E4E4E8, positioned left-aligned with ~12px left padding
-  2. **Hint text**: "RightShift to toggle" — JetBrains Mono, 11px, color #4A4A55, positioned right-aligned or bottom-right of header. This is a small, subtle hint for PC users so they know the keybind.
-- The header is the DRAG HANDLE — clicking and holding (mouse) or touching and holding (finger) on the header allows the user to drag the entire panel to any position on screen
-- Dragging implementation: track InputBegan on header frame, update panel Position on InputChanged (mouse movement or touch movement), release on InputEnded
+--// SIZING
+local viewport = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.new(1280, 720)
+local PANEL_W, PANEL_H, NAV_W, HEADER_H
 
-#### B) Body (below header)
-Split into two columns:
+if IS_MOBILE then
+    PANEL_W  = math.clamp(math.floor(viewport.X * 0.86), 300, 460)
+    PANEL_H  = math.clamp(math.floor(viewport.Y * 0.60), 280, 400)
+    NAV_W    = 50
+    HEADER_H = 44
+else
+    PANEL_W, PANEL_H, NAV_W, HEADER_H = 460, 400, 46, 42
+end
 
-**Left Column — Side Navigation:**
-- Width: ~44-50px
-- Background: same as panel or slightly different (#0F0F14)
-- Three buttons stacked vertically, filling the column:
-  1. **"M"** — represents Main
-  2. **"V"** — represents Visual
-  3. **"C"** — represents Config/Settings
-- Each button: square or slightly rounded square, fills column width, ~44-50px tall
-- Font: JetBrains Mono, 16px, uppercase
-- Active state: background #1A1A24, text color #E4E4E8, left accent border (2-3px wide, #5A5A7A or accent color)
-- Inactive state: background transparent or #14141A, text color #6A6A78
-- Hover state (PC only): background #16161E, smooth transition (~0.2s)
-- Click transition: smooth TweenService animation switching active/inactive styling on both the clicked button and the previously active button (~0.25s, EasingStyle.Quint)
+--// ROOT SCREENGUI
+local gui = new("ScreenGui", {
+    Name = "gwcc_UI",
+    ResetOnSpawn = false,
+    IgnoreGuiInset = true,
+    DisplayOrder = 9999,
+    ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+}, PlayerGui)
 
-**Right Column — Center Content Area:**
-- Fills remaining width of the panel (panel width minus side nav width)
-- Background: #0D0D12 (same as panel)
-- Acts as a scrollable container (ScrollingFrame) for future content — set CanvasSize and ScrollBarThickness appropriately. For now, content is minimal so scrolling is not active, but the structure should support adding scrollable content later.
-- Rounded right corners matching panel (6px)
+--============================================================
+-- COMPONENT 1: WELCOME / LOADING SCREEN
+--============================================================
+local welcome = new("Frame", {
+    Name = "Welcome",
+    BackgroundColor3 = T.Panel,
+    BackgroundTransparency = 0,
+    BorderSizePixel = 0,
+    Size = UDim2.fromScale(1, 1),
+    ZIndex = 50,
+}, gui)
 
-### Center Content — Initial State:
-When the main menu first appears (after welcome screen transition):
-1. **Typing animation**: Text appears character by character, simulating live typing
-   - Text content: "Welcome, " .. LocalPlayer.DisplayName .. "!" (or .Name if DisplayName is empty)
-   - IMPORTANT: No question marks, no unexpected characters. Pure clean text typing.
-   - Font: JetBrains Mono, 15px, color #E4E4E8
-   - Position: centered in the content area (both horizontally and vertically)
-   - Speed: approximately 50-80ms between each character (use task.wait())
-   - Implementation: iterate through the string, appending one character at a time to a TextLabel's Text property
+local wCenter = new("Frame", {
+    Name = "Center",
+    BackgroundTransparency = 1,
+    AnchorPoint = Vector2.new(0.5, 0.5),
+    Position = UDim2.fromScale(0.5, 0.5),
+    Size = UDim2.new(0, 360, 0, 130),
+}, welcome)
 
-2. **After typing completes**: the text remains visible until the user clicks a side navigation button
+local wTitle = font(new("TextLabel", {
+    Name = "Title",
+    BackgroundTransparency = 1,
+    Text = "Welcome to gw.cc",
+    TextColor3 = T.TextPrimary,
+    TextXAlignment = Enum.TextXAlignment.Center,
+    Size = UDim2.new(1, 0, 0, 26),
+    Position = UDim2.new(0, 0, 0, 0),
+}, wCenter), 20, Enum.FontWeight.Medium)
 
-### Center Content — Tab Selection:
-When a side navigation button is clicked:
-- The current center content fades out (TweenService, ~0.2s, transparency → 1)
-- New content fades in (TweenService, ~0.2s, transparency 1 → 0)
-- Content shown per tab (PLACEHOLDER for now — actual functions will be added in future versions):
-  - **M (Main)**: centered text "Main", JetBrains Mono 15px, color #E4E4E8
-  - **V (Visual)**: centered text "Visual", JetBrains Mono 15px, color #E4E4E8
-  - **C (Config/Settings)**: centered text "Config/Settings", JetBrains Mono 15px, color #E4E4E8
-- Each tab switch should use the same fade transition for consistency
-- The typing animation only plays once (on initial load). Subsequent tab switches use the fade transition only.
+local wCredit = font(new("TextLabel", {
+    Name = "Credit",
+    BackgroundTransparency = 1,
+    Text = "by illyxin",
+    TextColor3 = T.TextMuted,
+    TextXAlignment = Enum.TextXAlignment.Center,
+    Size = UDim2.new(1, 0, 0, 16),
+    Position = UDim2.new(0, 0, 0, 34),
+}, wCenter), 13)
 
-## COMPONENT 3: MINIMIZE / TOGGLE BUTTON (MOBILE ONLY)
+local barBack = new("Frame", {
+    Name = "BarBack",
+    BackgroundColor3 = T.BarBack,
+    BorderSizePixel = 0,
+    AnchorPoint = Vector2.new(0.5, 0),
+    Position = UDim2.new(0.5, 0, 0, 74),
+    Size = UDim2.new(0, 320, 0, 7),
+    ClipsDescendants = true,
+}, wCenter)
+corner(barBack, 4)
 
-A small floating button visible on mobile devices when the main menu is hidden.
+local barFill = new("Frame", {
+    Name = "BarFill",
+    BackgroundColor3 = T.BarFillA,
+    BorderSizePixel = 0,
+    Size = UDim2.new(0, 0, 1, 0),
+}, barBack)
+corner(barFill, 4)
+new("UIGradient", {
+    Color = ColorSequence.new(T.BarFillA, T.BarFillB),
+    Rotation = 0,
+}, barFill)
 
-### Visibility Logic:
-- Show this button ONLY on mobile (UserInputService.TouchEnabled == true and UserInputService.MouseEnabled == false)
-- On PC, this button is NOT created — PC users toggle the menu via RightShift keybind
-- The button appears when the main menu is hidden/minimized
-- The button disappears when the main menu is shown
+local wPercent = font(new("TextLabel", {
+    Name = "Percent",
+    BackgroundTransparency = 1,
+    Text = "Loading... 0%",
+    TextColor3 = T.TextMuted,
+    TextXAlignment = Enum.TextXAlignment.Center,
+    Size = UDim2.new(1, 0, 0, 14),
+    Position = UDim2.new(0, 0, 0, 90),
+}, wCenter), 11)
 
-### Design — Premium, Non-Basic:
-- Shape: small rounded rectangle (NOT a circle), approximately 40×40px, CornerRadius 8-10px
-- Background: subtle gradient (e.g., #1A1A24 to #14141A), solid (not transparent)
-- Subtle drop shadow for depth
-- Inside: a minimal, elegant icon — NOT a letter. Suggestions:
-  - Two horizontal lines (like a minimized-window icon), thin, 2px tall, #6A6A78, centered
-  - Or a stylized chevron pointing upward
-  - Or a minimal geometric mark (e.g., small square outline)
-- On touch: subtle scale-up animation (1.0 → 1.05 → 1.0, ~0.2s) and background color shift to #1E1E28
-- Position: bottom-right corner of screen, with ~20px margin from edges
-- Tapping it shows the main menu (with fade/slide-in animation) and hides the button
-- When menu is hidden again (via the same button or another mechanism), the button reappears
+--============================================================
+-- COMPONENT 2: MAIN MENU
+--============================================================
+local panel = new("Frame", {
+    Name = "MainMenu",
+    BackgroundColor3 = T.Panel,
+    BackgroundTransparency = 0,
+    BorderSizePixel = 0,
+    AnchorPoint = Vector2.new(0.5, 0.5),
+    Position = UDim2.new(0.70, 0, 0.5, 0),
+    Size = UDim2.fromOffset(PANEL_W, PANEL_H),
+    ClipsDescendants = false,
+    Visible = false,
+    ZIndex = 10,
+}, gui)
+corner(panel, 6)
+shadow(panel, 70, 0.5)
+new("UIStroke", {
+    Color = Color3.fromHex("1A1A22"),
+    Thickness = 1,
+    Transparency = 0.35,
+    ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+}, panel)
 
-### Mobile Menu Toggle Flow:
-1. Menu visible + button hidden
-2. User taps the floating button → menu slides/fades out (~0.3s), button stays visible
-3. User taps the button again → menu slides/fades back in (~0.3s)
+--// A) HEADER (drag handle)
+local header = new("Frame", {
+    Name = "Header",
+    BackgroundColor3 = T.Header,
+    BorderSizePixel = 0,
+    Size = UDim2.new(1, 0, 0, HEADER_H),
+    ZIndex = 3,
+}, panel)
+corner(header, 6)
+new("UIGradient", {
+    Color = ColorSequence.new(T.HeaderTop, T.Panel),
+    Rotation = 90,
+}, header)
+new("Frame", {
+    Name = "HeaderFoot",
+    BackgroundColor3 = T.Panel,
+    BorderSizePixel = 0,
+    AnchorPoint = Vector2.new(0, 1),
+    Position = UDim2.new(0, 0, 1, 0),
+    Size = UDim2.new(1, 0, 0, 6),
+    ZIndex = 2,
+}, header)
+new("Frame", {
+    Name = "HeaderLine",
+    BackgroundColor3 = Color3.fromHex("17171F"),
+    BorderSizePixel = 0,
+    AnchorPoint = Vector2.new(0, 1),
+    Position = UDim2.new(0, 0, 1, 0),
+    Size = UDim2.new(1, 0, 0, 1),
+    ZIndex = 4,
+}, header)
 
-Actually — alternative: the floating button should toggle the menu. When menu is visible, tapping the button hides it. When menu is hidden, tapping the button shows it. The button is ALWAYS visible on mobile.
+local brand = font(new("TextLabel", {
+    Name = "Brand",
+    BackgroundTransparency = 1,
+    Text = "gw.cc",
+    TextColor3 = T.TextPrimary,
+    TextXAlignment = Enum.TextXAlignment.Left,
+    AnchorPoint = Vector2.new(0, 0.5),
+    Position = UDim2.new(0, 12, 0.5, 0),
+    Size = UDim2.new(0, 120, 1, 0),
+    ZIndex = 5,
+}, header), 18, Enum.FontWeight.Medium)
 
-## COMPONENT 4: PC KEYBIND — RIGHT SHIFT
+local hint = font(new("TextLabel", {
+    Name = "Hint",
+    BackgroundTransparency = 1,
+    Text = "RightShift to toggle",
+    TextColor3 = T.TextHint,
+    TextXAlignment = Enum.TextXAlignment.Right,
+    AnchorPoint = Vector2.new(1, 0.5),
+    Position = UDim2.new(1, -12, 0.5, 0),
+    Size = UDim2.new(0, 180, 1, 0),
+    ZIndex = 5,
+    Visible = IS_PC,
+}, header), 11)
 
-### Behavior:
-- Pressing RightShift toggles the main menu visibility (show/hide)
-- When hidden: the panel fades/slides out (TweenService, ~0.3s, EasingStyle.Quint)
-- When shown: the panel fades/slides back in (~0.3s)
-- Implementation: UserInputService.InputBegan, check KeyCode.RightShift
-- The hint text "RightShift to toggle" in the header ensures PC users discover this
+--// B) BODY
+local body = new("Frame", {
+    Name = "Body",
+    BackgroundTransparency = 1,
+    Position = UDim2.new(0, 0, 0, HEADER_H),
+    Size = UDim2.new(1, 0, 1, -HEADER_H),
+}, panel)
 
-## ANIMATION SPECIFICATIONS — COMPLETE LIST
+--// LEFT COLUMN: SIDE NAV
+local navColumn = new("Frame", {
+    Name = "Nav",
+    BackgroundColor3 = T.NavColumn,
+    BorderSizePixel = 0,
+    Size = UDim2.new(0, NAV_W, 1, 0),
+}, body)
+corner(navColumn, 6)
+new("Frame", {
+    Name = "NavTopFill",
+    BackgroundColor3 = T.NavColumn,
+    BorderSizePixel = 0,
+    Size = UDim2.new(1, 0, 0, 8),
+}, navColumn)
 
-All animations must use TweenService with appropriate easing. NO instant pop-ins, NO instant disappearances. Everything must feel smooth and premium.
+local NAV_BTN = math.max(44, NAV_W)
+local tabs = { "M", "V", "C" }
+local tabTitles = { M = "Main", V = "Visual", C = "Config/Settings" }
+local navButtons, navAccents = {}, {}
+local activeTab = "M"
+local firstLoad = true
 
-| Animation | Duration | EasingStyle | EasingDirection |
-|---|---|---|---|
-| Loading bar fill (0→100%) | ~5-6 seconds | Linear | In |
-| Welcome screen fade out | ~0.6-0.8s | Quint | In |
-| Main menu fade in | ~0.6-0.8s | Quint | Out |
-| Typing animation (per character) | 50-80ms per char | N/A (task.wait) | N/A |
-| Tab content fade out | ~0.2s | Quint | In |
-| Tab content fade in | ~0.2s | Quint | Out |
-| Side button active/inactive transition | ~0.25s | Quint | Out |
-| Side button hover (PC) | ~0.2s | Quad | Out |
-| Panel show (RightShift / mobile button) | ~0.3s | Quint | Out |
-| Panel hide (RightShift / mobile button) | ~0.3s | Quint | In |
-| Minimize button touch scale | ~0.2s | Quad | Out |
-| Minimize button color shift | ~0.2s | Quad | Out |
+for i, id in ipairs(tabs) do
+    local btn = font(new("TextButton", {
+        Name = "Nav_" .. id,
+        AutoButtonColor = false,
+        BackgroundColor3 = T.NavInactive,
+        BackgroundTransparency = 0,
+        BorderSizePixel = 0,
+        Text = id,
+        TextColor3 = T.TextMuted,
+        Position = UDim2.new(0, 0, 0, (i - 1) * NAV_BTN),
+        Size = UDim2.new(1, 0, 0, NAV_BTN),
+    }, navColumn), IS_MOBILE and 18 or 16, Enum.FontWeight.Medium)
+    corner(btn, 4)
 
-## CROSS-PLATFORM REQUIREMENTS
+    local accent = new("Frame", {
+        Name = "Accent",
+        BackgroundColor3 = T.Accent,
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        Size = UDim2.new(0, 3, 1, -10),
+        Position = UDim2.new(0, 0, 0, 5),
+        ZIndex = 2,
+    }, btn)
+    corner(accent, 2)
 
-1. **Platform Detection**: Check UserInputService.TouchEnabled and UserInputService.MouseEnabled at script start
-2. **Mobile Adjustments**:
-   - Scale panel down if screen is small (use viewport size to calculate appropriate panel size)
-   - Ensure side navigation buttons are large enough for touch (min 44×44px)
-   - Show the floating minimize/toggle button
-   - Larger touch targets generally
-3. **PC Adjustments**:
-   - Standard panel size
-   - Hide the floating minimize button
-   - Enable RightShift keybind
-   - Enable hover effects on side buttons
-4. **Dragging Support**:
-   - PC: mouse-based drag (InputBegan with UserInputType.MouseButton1, InputChanged with MouseMovement)
-   - Mobile: touch-based drag (InputBegan with Touch, InputChanged with Touch)
-   - Handle both in the same drag logic by checking input type
+    navButtons[id] = btn
+    navAccents[id] = accent
+end
 
-## STRUCTURAL NOTES FOR FUTURE EXPANSION
+local function styleNav(id, active)
+    local btn, accent = navButtons[id], navAccents[id]
+    local info = TI(0.25, QUINT, Enum.EasingDirection.Out)
+    TweenService:Create(btn, info, {
+        BackgroundColor3 = active and T.NavActive or T.NavInactive,
+        TextColor3 = active and T.TextPrimary or T.TextMuted,
+    }):Play()
+    TweenService:Create(accent, info, { BackgroundTransparency = active and 0 or 1 }):Play()
+end
 
-The center content area (right column) should be designed as a flexible container that will later hold:
-- Accordion/dropdown sections (expandable headers that reveal lists of items)
-- Toggle switches (function name on left, switch on right)
-- Color square indicators (small colored squares that open a full HSV color picker when clicked)
-- Sliders (for value adjustment)
-- Sub-settings panels (expandable under each item)
+--// RIGHT COLUMN: CONTENT
+local content = new("ScrollingFrame", {
+    Name = "Content",
+    BackgroundColor3 = T.Panel,
+    BackgroundTransparency = 0,
+    BorderSizePixel = 0,
+    Position = UDim2.new(0, NAV_W, 0, 0),
+    Size = UDim2.new(1, -NAV_W, 1, 0),
+    CanvasSize = UDim2.new(0, 0, 0, 0),
+    ScrollBarThickness = 4,
+    ScrollBarImageColor3 = T.ScrollBar,
+    ScrollBarImageTransparency = 0.15,
+    ScrollingDirection = Enum.ScrollingDirection.Y,
+    ElasticBehavior = Enum.ElasticBehavior.WhenScrollable,
+    ClipsDescendants = true,
+}, body)
+corner(content, 6)
+new("Frame", {
+    Name = "EdgeFill",
+    BackgroundColor3 = T.Panel,
+    BorderSizePixel = 0,
+    Size = UDim2.new(0, 8, 1, 0),
+    ZIndex = 0,
+}, content)
 
-For now, none of these components need to be implemented. But the content area should use a ScrollingFrame structure so that when these are added later, they can be parented to it and scroll naturally. Set ScrollBarThickness to ~4px, scrollbar color #2A2A35, and scrollbar background transparent.
+local pages = {}
+local function makePage(name, text)
+    local page = new("Frame", {
+        Name = "Page_" .. name,
+        BackgroundTransparency = 1,
+        Size = UDim2.new(1, 0, 1, 0),
+        Visible = false,
+    }, content)
 
-## WHAT NOT TO INCLUDE IN THIS VERSION
-- No toggle switches
-- No color picker component
-- No slider component
-- No accordion/dropdown component
-- No settings save/load (no writefile/readfile)
-- No game manipulation logic of any kind
-- No RemoteEvent firing
-- No Highlight objects
-- No workspace scanning
-- No character detection
+    local label = font(new("TextLabel", {
+        Name = "Label",
+        BackgroundTransparency = 1,
+        Text = text,
+        TextColor3 = T.TextPrimary,
+        TextTransparency = 1,
+        TextXAlignment = Enum.TextXAlignment.Center,
+        TextYAlignment = Enum.TextYAlignment.Center,
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.fromScale(0.5, 0.5),
+        Size = UDim2.new(1, -20, 0, 24),
+    }, page), 15)
 
-This version is PURELY the UI shell: welcome screen, main menu panel, side navigation, center content area with placeholder text, all animations, cross-platform support, and platform detection. The functional UI components will be specified in subsequent iterations.
+    pages[name] = { frame = page, label = label }
+    return pages[name]
+end
 
-## OUTPUT FORMAT
-Provide the complete Luau script as a single file. The script should be self-contained — it creates all GUI elements, sets up all animations, handles all input, and manages the welcome-to-menu transition. No external dependencies. No module imports beyond standard Roblox services (TweenService, UserInputService, Players, RunService, etc.).
+local rawName = LocalPlayer.DisplayName
+if rawName == nil or rawName == "" then rawName = LocalPlayer.Name end
+rawName = tostring(rawName):gsub("[^%w%s_%.%-]", "")
+local typedText = "Welcome, " .. rawName .. "!"
+
+local intro = makePage("Intro", "")
+makePage("M", tabTitles.M)
+makePage("V", tabTitles.V)
+makePage("C", tabTitles.C)
+
+local currentPage = intro
+local FADE_OUT = TI(0.2, QUINT, EASE_IN)
+local FADE_IN  = TI(0.2, QUINT, Enum.EasingDirection.Out)
+
+local function showPage(target)
+    if currentPage == target then return end
+    local old = currentPage
+    currentPage = target
+
+    TweenService:Create(old.label, FADE_OUT, { TextTransparency = 1 }):Play()
+    task.delay(0.2, function()
+        if currentPage ~= target then return end
+        old.frame.Visible = false
+    end)
+
+    target.label.TextTransparency = 1
+    target.frame.Visible = true
+    TweenService:Create(target.label, FADE_IN, { TextTransparency = 0 }):Play()
+end
+
+--// NAV INTERACTION
+for _, id in ipairs(tabs) do
+    local btn = navButtons[id]
+
+    if IS_PC then
+        btn.MouseEnter:Connect(function()
+            if activeTab ~= id then
+                TweenService:Create(btn, TI(0.2, QUAD, Enum.EasingDirection.Out), { BackgroundColor3 = T.NavHover }):Play()
+            end
+        end)
+        btn.MouseLeave:Connect(function()
+            if activeTab ~= id then
+                TweenService:Create(btn, TI(0.2, QUAD, Enum.EasingDirection.Out), { BackgroundColor3 = T.NavInactive }):Play()
+            end
+        end)
+    end
+
+    btn.Activated:Connect(function()
+        if activeTab == id and not firstLoad then return end
+        local previous = activeTab
+        activeTab = id
+        firstLoad = false
+        if previous ~= id then styleNav(previous, false) end
+        styleNav(id, true)
+        showPage(pages[id])
+    end)
+end
+
+styleNav("M", true)
+
+--============================================================
+-- DRAGGING
+--============================================================
+local dragging, dragInput, dragStart, startPos = false, nil, nil, nil
+local panelBasePos = panel.Position
+
+header.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1
+        or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        dragInput = input
+        dragStart = input.Position
+        startPos = panel.Position
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                dragging = false
+                panelBasePos = panel.Position
+            end
+        end)
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if not dragging or not dragInput then return end
+    if input.UserInputType ~= Enum.UserInputType.MouseMovement
+        and input.UserInputType ~= Enum.UserInputType.Touch then return end
+    local delta = input.Position - dragStart
+    panel.Position = UDim2.new(
+        startPos.X.Scale, startPos.X.Offset + delta.X,
+        startPos.Y.Scale, startPos.Y.Offset + delta.Y
+    )
+    panelBasePos = panel.Position
+end)
+
+--============================================================
+-- SHOW / HIDE
+--============================================================
+local panelSnap = snapshot(panel)
+applySnap(panelSnap, 1)
+
+local menuVisible = false
+local animating = false
+local minimizeBtn
+
+local function setMinimizeIconState(open)
+    if not minimizeBtn then return end
+    local icon = minimizeBtn:FindFirstChild("Icon")
+    if not icon then return end
+    TweenService:Create(icon, TI(0.2, QUAD, Enum.EasingDirection.Out), {
+        BackgroundTransparency = open and 0.35 or 0,
+    }):Play()
+end
+
+local function showMenu(duration)
+    if menuVisible or animating then return end
+    animating = true
+    menuVisible = true
+    panel.Visible = true
+    applySnap(panelSnap, 1)
+    panel.Position = panelBasePos + UDim2.fromOffset(0, 24)
+    local info = TI(duration or 0.3, QUINT, Enum.EasingDirection.Out)
+    tweenSnap(panelSnap, info, false)
+    TweenService:Create(panel, info, { Position = panelBasePos }):Play()
+    setMinimizeIconState(true)
+    task.delay(duration or 0.3, function() animating = false end)
+end
+
+local function hideMenu(duration)
+    if not menuVisible or animating then return end
+    animating = true
+    menuVisible = false
+    panelSnap = snapshot(panel)
+    local info = TI(duration or 0.3, QUINT, EASE_IN)
+    tweenSnap(panelSnap, info, true)
+    TweenService:Create(panel, info, { Position = panelBasePos + UDim2.fromOffset(0, 24) }):Play()
+    setMinimizeIconState(false)
+    task.delay(duration or 0.3, function()
+        panel.Visible = false
+        panel.Position = panelBasePos
+        animating = false
+    end)
+end
+
+local function toggleMenu()
+    if menuVisible then hideMenu() else showMenu() end
+end
+
+--// PC KEYBIND
+if IS_PC then
+    ContextActionService:BindAction("gwcc_toggle", function(_, state)
+        if state == Enum.UserInputState.Begin then
+            toggleMenu()
+        end
+        return Enum.ContextActionResult.Sink
+    end, false, Enum.KeyCode.RightShift)
+end
+
+--============================================================
+-- COMPONENT 3: MOBILE FLOATING TOGGLE
+--============================================================
+if IS_MOBILE then
+    minimizeBtn = new("ImageButton", {
+        Name = "Minimize",
+        AutoButtonColor = false,
+        BackgroundColor3 = T.MinA,
+        BackgroundTransparency = 0,
+        BorderSizePixel = 0,
+        Image = "",
+        AnchorPoint = Vector2.new(1, 1),
+        Position = UDim2.new(1, -20, 1, -20),
+        Size = UDim2.fromOffset(44, 44),
+        ZIndex = 30,
+    }, gui)
+    corner(minimizeBtn, 10)
+    shadow(minimizeBtn, 34, 0.6)
+    new("UIGradient", {
+        Color = ColorSequence.new(T.MinA, T.MinB),
+        Rotation = 90,
+    }, minimizeBtn)
+    new("UIStroke", {
+        Color = Color3.fromHex("22222C"),
+        Thickness = 1,
+        Transparency = 0.4,
+    }, minimizeBtn)
+    local scale = new("UIScale", { Scale = 1 }, minimizeBtn)
+
+    local icon = new("Frame", {
+        Name = "Icon",
+        BackgroundColor3 = T.TextMuted,
+        BorderSizePixel = 0,
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.new(0.5, 0, 0.5, -4),
+        Size = UDim2.fromOffset(18, 2),
+    }, minimizeBtn)
+    corner(icon, 1)
+    local icon2 = new("Frame", {
+        Name = "Icon2",
+        BackgroundColor3 = T.TextMuted,
+        BorderSizePixel = 0,
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.new(0.5, 0, 0.5, 4),
+        Size = UDim2.fromOffset(12, 2),
+    }, minimizeBtn)
+    corner(icon2, 1)
+
+    local qOut = TI(0.2, QUAD, Enum.EasingDirection.Out)
+    minimizeBtn.InputBegan:Connect(function(input)
+        if input.UserInputType ~= Enum.UserInputType.Touch then return end
+        TweenService:Create(scale, TI(0.1, QUAD, Enum.EasingDirection.Out), { Scale = 1.05 }):Play()
+        TweenService:Create(minimizeBtn, qOut, { BackgroundColor3 = T.MinPressed }):Play()
+    end)
+    minimizeBtn.InputEnded:Connect(function(input)
+        if input.UserInputType ~= Enum.UserInputType.Touch then return end
+        TweenService:Create(scale, qOut, { Scale = 1 }):Play()
+        TweenService:Create(minimizeBtn, qOut, { BackgroundColor3 = T.MinA }):Play()
+    end)
+    minimizeBtn.Activated:Connect(toggleMenu)
+end
+
+--============================================================
+-- BOOT SEQUENCE
+--============================================================
+local function typeIntro()
+    intro.frame.Visible = true
+    intro.label.Text = ""
+    intro.label.TextTransparency = 0
+    local built = ""
+    -- FIX: correct grapheme iteration
+    for pos1, pos2 in utf8.graphemes(typedText) do
+        built = built .. typedText:sub(pos1, pos2 - 1)
+        intro.label.Text = built
+        task.wait(0.06)
+    end
+    intro.label.Text = typedText
+end
+
+task.spawn(function()

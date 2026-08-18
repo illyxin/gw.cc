@@ -1,660 +1,570 @@
---[[
-    gw.cc  |  UI SHELL v1.0
-    Pure interface framework. No game logic, no functional features.
---]]
+--==============================================================
+--  PANEL UI  •  single client script  (LocalScript / executor)
+--==============================================================
+local Players           = game:GetService("Players")
+local UserInputService   = game:GetService("UserInputService")
+local TweenService       = game:GetService("TweenService")
 
---// SERVICES
-local Players               = game:GetService("Players")
-local TweenService          = game:GetService("TweenService")
-local UserInputService      = game:GetService("UserInputService")
-local ContextActionService  = game:GetService("ContextActionService")
-local RunService            = game:GetService("RunService")
+local player    = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
 
-local LocalPlayer = Players.LocalPlayer
-local PlayerGui   = LocalPlayer:WaitForChild("PlayerGui")
-
---// THEME
-local T = {
-    Panel        = Color3.fromHex("0D0D12"),
-    Header       = Color3.fromHex("111118"),
-    HeaderTop    = Color3.fromHex("13131A"),
-    NavColumn    = Color3.fromHex("0F0F14"),
-    NavActive    = Color3.fromHex("1A1A24"),
-    NavInactive  = Color3.fromHex("14141A"),
-    NavHover     = Color3.fromHex("16161E"),
-    TextPrimary  = Color3.fromHex("E4E4E8"),
-    TextMuted    = Color3.fromHex("6A6A78"),
-    TextHint     = Color3.fromHex("4A4A55"),
-    Accent       = Color3.fromHex("5A5A7A"),
-    BarBack      = Color3.fromHex("181820"),
-    BarFillA     = Color3.fromHex("4A4A6A"),
-    BarFillB     = Color3.fromHex("6A6A8A"),
-    ScrollBar    = Color3.fromHex("2A2A35"),
-    MinA         = Color3.fromHex("1A1A24"),
-    MinB         = Color3.fromHex("14141A"),
-    MinPressed   = Color3.fromHex("1E1E28"),
+----------------------------------------------------------------
+-- PALETTE
+----------------------------------------------------------------
+local C = {
+	PanelBG      = Color3.fromRGB(13, 13, 18),
+	HeaderTop    = Color3.fromRGB(19, 19, 26),
+	HeaderBottom = Color3.fromRGB(13, 13, 18),
+	NavActive    = Color3.fromRGB(26, 26, 36),
+	NavInactive  = Color3.fromRGB(20, 20, 26),
+	NavHover     = Color3.fromRGB(24, 24, 32),
+	TextPrimary  = Color3.fromRGB(228, 228, 232),
+	TextMuted    = Color3.fromRGB(106, 106, 120),
+	Accent       = Color3.fromRGB(106, 106, 138),
+	AccentDark   = Color3.fromRGB(74, 74, 106),
+	Stroke       = Color3.fromRGB(38, 38, 48),
+	Line         = Color3.fromRGB(30, 30, 40),
 }
+local SHADOW_ID = "rbxassetid://6014261993"
+local SHADOW_SLICE = Rect.new(49, 49, 450, 450)
 
---// PLATFORM
-local IS_TOUCH  = UserInputService.TouchEnabled
-local IS_MOUSE  = UserInputService.MouseEnabled
-local IS_MOBILE = IS_TOUCH and not IS_MOUSE
-local IS_PC     = IS_MOUSE
-
---// EASING
-local function TI(t, style, dir)
-    return TweenInfo.new(t, style or Enum.EasingStyle.Quint, dir or Enum.EasingDirection.Out)
-end
-local EASE_IN  = Enum.EasingDirection.In
-local QUINT    = Enum.EasingStyle.Quint
-local QUAD     = Enum.EasingStyle.Quad
-local LINEAR   = Enum.EasingStyle.Linear
-
---// HELPERS
+----------------------------------------------------------------
+-- HELPER
+----------------------------------------------------------------
 local function new(class, props, parent)
-    local inst = Instance.new(class)
-    for k, v in pairs(props or {}) do
-        inst[k] = v
-    end
-    if parent then inst.Parent = parent end
-    return inst
+	local inst = Instance.new(class)
+	for k, v in pairs(props) do inst[k] = v end
+	if parent then inst.Parent = parent end
+	return inst
 end
 
-local function font(label, size, weight)
-    label.TextSize = size
-    local ok = pcall(function()
-        label.FontFace = Font.new("rbxasset://fonts/families/JetBrainsMono.json", weight or Enum.FontWeight.Regular, Enum.FontStyle.Normal)
-    end)
-    if not ok then
-        label.Font = Enum.Font.Code
-    end
-    return label
-end
-
-local function corner(parent, r)
-    return new("UICorner", { CornerRadius = UDim.new(0, r or 6) }, parent)
-end
-
-local function shadow(parent, spread, alpha)
-    return new("ImageLabel", {
-        Name = "Shadow",
-        BackgroundTransparency = 1,
-        Image = "rbxassetid://6014261993",
-        ImageColor3 = Color3.new(0, 0, 0),
-        ImageTransparency = alpha or 0.55,
-        ScaleType = Enum.ScaleType.Slice,
-        SliceCenter = Rect.new(49, 49, 450, 450),
-        AnchorPoint = Vector2.new(0.5, 0.5),
-        Position = UDim2.fromScale(0.5, 0.5),
-        Size = UDim2.new(1, spread or 60, 1, spread or 60),
-        ZIndex = 0,
-    }, parent)
-end
-
--- transparency snapshot / fade system
-local function snapshot(root)
-    local snap = {}
-    local list = root:GetDescendants()
-    table.insert(list, 1, root)
-    for _, o in ipairs(list) do
-        if o:IsA("GuiObject") then
-            table.insert(snap, { o, "BackgroundTransparency", o.BackgroundTransparency })
-        end
-        if o:IsA("TextLabel") or o:IsA("TextButton") or o:IsA("TextBox") then
-            table.insert(snap, { o, "TextTransparency", o.TextTransparency })
-        end
-        if o:IsA("ImageLabel") or o:IsA("ImageButton") then
-            table.insert(snap, { o, "ImageTransparency", o.ImageTransparency })
-        end
-        if o:IsA("UIStroke") then
-            table.insert(snap, { o, "Transparency", o.Transparency })
-        end
-    end
-    return snap
-end
-
-local function applySnap(snap, value)
-    for _, e in ipairs(snap) do
-        e[1][e[2]] = value or e[3]
-    end
-end
-
-local function tweenSnap(snap, info, toHidden)
-    for _, e in ipairs(snap) do
-        TweenService:Create(e[1], info, { [e[2]] = toHidden and 1 or e[3] }):Play()
-    end
-end
-
---// SIZING
-local viewport = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.new(1280, 720)
-local PANEL_W, PANEL_H, NAV_W, HEADER_H
-
-if IS_MOBILE then
-    PANEL_W  = math.clamp(math.floor(viewport.X * 0.86), 300, 460)
-    PANEL_H  = math.clamp(math.floor(viewport.Y * 0.60), 280, 400)
-    NAV_W    = 50
-    HEADER_H = 44
-else
-    PANEL_W, PANEL_H, NAV_W, HEADER_H = 460, 400, 46, 42
-end
-
---// ROOT SCREENGUI
+--==============================================================
+-- 1. SCREENGUI
+--==============================================================
 local gui = new("ScreenGui", {
-    Name = "gwcc_UI",
-    ResetOnSpawn = false,
-    IgnoreGuiInset = true,
-    DisplayOrder = 9999,
-    ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
-}, PlayerGui)
+	Name = "PanelUI",
+	ResetOnSpawn = false,
+	IgnoreGuiInset = true,
+	ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+	DisplayOrder = 100,
+}, playerGui)
 
---============================================================
--- COMPONENT 1: WELCOME / LOADING SCREEN
---============================================================
+----------------------------------------------------------------
+-- RESPONSIVE SIZING  (read viewport AFTER ScreenGui exists)
+----------------------------------------------------------------
+local cam = workspace.CurrentCamera
+while not cam do task.wait() cam = workspace.CurrentCamera end
+local viewport = cam.ViewportSize
+local screenW, screenH = viewport.X, viewport.Y
+
+local PANEL_W, PANEL_H, NAV_W, NAV_BTN_H, HEADER_H, NAV_TEXT
+
+if screenW < 500 then                        -- likely a phone
+	PANEL_W   = math.clamp(math.floor(screenW * 0.86), 280, 460)
+	PANEL_H   = math.clamp(math.floor(screenH * 0.60), 280, 400)
+	NAV_W     = 50
+	NAV_BTN_H = 50
+	HEADER_H  = 44
+	NAV_TEXT  = 18
+else                                         -- PC / desktop
+	PANEL_W   = 460
+	PANEL_H   = 400
+	NAV_W     = 46
+	NAV_BTN_H = 46
+	HEADER_H  = 42
+	NAV_TEXT  = 16
+end
+
+local BAR_W = math.clamp(math.floor(screenW * 0.55), 220, 420)
+
+--==============================================================
+-- 2. WELCOME SCREEN
+--==============================================================
 local welcome = new("Frame", {
-    Name = "Welcome",
-    BackgroundColor3 = T.Panel,
-    BackgroundTransparency = 0,
-    BorderSizePixel = 0,
-    Size = UDim2.fromScale(1, 1),
-    ZIndex = 50,
+	Name = "Welcome",
+	Size = UDim2.fromScale(1, 1),
+	BackgroundColor3 = C.PanelBG,
+	BorderSizePixel = 0,
+	ZIndex = 50,
 }, gui)
 
 local wCenter = new("Frame", {
-    Name = "Center",
-    BackgroundTransparency = 1,
-    AnchorPoint = Vector2.new(0.5, 0.5),
-    Position = UDim2.fromScale(0.5, 0.5),
-    Size = UDim2.new(0, 360, 0, 130),
+	Name = "Center",
+	AnchorPoint = Vector2.new(0.5, 0.5),
+	Position = UDim2.fromScale(0.5, 0.5),
+	Size = UDim2.fromOffset(BAR_W, 110),
+	BackgroundTransparency = 1,
+	ZIndex = 51,
 }, welcome)
 
-local wTitle = font(new("TextLabel", {
-    Name = "Title",
-    BackgroundTransparency = 1,
-    Text = "Welcome to gw.cc",
-    TextColor3 = T.TextPrimary,
-    TextXAlignment = Enum.TextXAlignment.Center,
-    Size = UDim2.new(1, 0, 0, 26),
-    Position = UDim2.new(0, 0, 0, 0),
-}, wCenter), 20, Enum.FontWeight.Medium)
+new("TextLabel", {
+	Name = "Title",
+	Size = UDim2.new(1, 0, 0, 30),
+	BackgroundTransparency = 1,
+	Font = Enum.Font.GothamBold,
+	Text = "WELCOME",
+	TextSize = 22,
+	TextColor3 = C.TextPrimary,
+	TextTransparency = 0,
+	ZIndex = 51,
+}, wCenter)
 
-local wCredit = font(new("TextLabel", {
-    Name = "Credit",
-    BackgroundTransparency = 1,
-    Text = "by illyxin",
-    TextColor3 = T.TextMuted,
-    TextXAlignment = Enum.TextXAlignment.Center,
-    Size = UDim2.new(1, 0, 0, 16),
-    Position = UDim2.new(0, 0, 0, 34),
-}, wCenter), 13)
+new("TextLabel", {
+	Name = "Credit",
+	Position = UDim2.new(0, 0, 0, 32),
+	Size = UDim2.new(1, 0, 0, 18),
+	BackgroundTransparency = 1,
+	Font = Enum.Font.Gotham,
+	Text = "made by dev",
+	TextSize = 13,
+	TextColor3 = C.TextMuted,
+	TextTransparency = 0,
+	ZIndex = 51,
+}, wCenter)
 
 local barBack = new("Frame", {
-    Name = "BarBack",
-    BackgroundColor3 = T.BarBack,
-    BorderSizePixel = 0,
-    AnchorPoint = Vector2.new(0.5, 0),
-    Position = UDim2.new(0.5, 0, 0, 74),
-    Size = UDim2.new(0, 320, 0, 7),
-    ClipsDescendants = true,
+	Name = "BarBack",
+	Position = UDim2.new(0, 0, 0, 66),
+	Size = UDim2.new(1, 0, 0, 6),
+	BackgroundColor3 = C.NavActive,
+	BorderSizePixel = 0,
+	ZIndex = 51,
 }, wCenter)
-corner(barBack, 4)
+new("UICorner", { CornerRadius = UDim.new(1, 0) }, barBack)
 
 local barFill = new("Frame", {
-    Name = "BarFill",
-    BackgroundColor3 = T.BarFillA,
-    BorderSizePixel = 0,
-    Size = UDim2.new(0, 0, 1, 0),
+	Name = "BarFill",
+	Size = UDim2.new(0, 0, 1, 0),
+	BackgroundColor3 = C.AccentDark,
+	BorderSizePixel = 0,
+	ZIndex = 52,
 }, barBack)
-corner(barFill, 4)
+new("UICorner", { CornerRadius = UDim.new(1, 0) }, barFill)
 new("UIGradient", {
-    Color = ColorSequence.new(T.BarFillA, T.BarFillB),
-    Rotation = 0,
+	Color = ColorSequence.new(C.AccentDark, C.Accent),
+	Rotation = 0,
 }, barFill)
 
-local wPercent = font(new("TextLabel", {
-    Name = "Percent",
-    BackgroundTransparency = 1,
-    Text = "Loading... 0%",
-    TextColor3 = T.TextMuted,
-    TextXAlignment = Enum.TextXAlignment.Center,
-    Size = UDim2.new(1, 0, 0, 14),
-    Position = UDim2.new(0, 0, 0, 90),
-}, wCenter), 11)
+local pct = new("TextLabel", {
+	Name = "Percent",
+	Position = UDim2.new(0, 0, 0, 78),
+	Size = UDim2.new(1, 0, 0, 16),
+	BackgroundTransparency = 1,
+	Font = Enum.Font.Gotham,
+	Text = "0%",
+	TextSize = 12,
+	TextColor3 = C.TextMuted,
+	TextTransparency = 0,
+	ZIndex = 51,
+}, wCenter)
 
---============================================================
--- COMPONENT 2: MAIN MENU
---============================================================
+--==============================================================
+-- 3. MAIN PANEL
+--==============================================================
 local panel = new("Frame", {
-    Name = "MainMenu",
-    BackgroundColor3 = T.Panel,
-    BackgroundTransparency = 0,
-    BorderSizePixel = 0,
-    AnchorPoint = Vector2.new(0.5, 0.5),
-    Position = UDim2.new(0.70, 0, 0.5, 0),
-    Size = UDim2.fromOffset(PANEL_W, PANEL_H),
-    ClipsDescendants = false,
-    Visible = false,
-    ZIndex = 10,
+	Name = "Panel",
+	AnchorPoint = Vector2.new(0.5, 0.5),
+	Position = UDim2.fromScale(0.5, 0.5),
+	Size = UDim2.fromOffset(PANEL_W, PANEL_H),
+	BackgroundColor3 = C.PanelBG,
+	BorderSizePixel = 0,
+	Visible = false,
+	Active = true,
+	ZIndex = 2,
 }, gui)
-corner(panel, 6)
-shadow(panel, 70, 0.5)
+new("UICorner", { CornerRadius = UDim.new(0, 10) }, panel)
+
+new("ImageLabel", {
+	Name = "Shadow",
+	AnchorPoint = Vector2.new(0.5, 0.5),
+	Position = UDim2.fromScale(0.5, 0.5),
+	Size = UDim2.new(1, 60, 1, 60),
+	BackgroundTransparency = 1,
+	Image = SHADOW_ID,
+	ImageColor3 = Color3.fromRGB(0, 0, 0),
+	ImageTransparency = 0.45,
+	ScaleType = Enum.ScaleType.Slice,
+	SliceCenter = SHADOW_SLICE,
+	ZIndex = 1,
+}, panel)
+
 new("UIStroke", {
-    Color = Color3.fromHex("1A1A22"),
-    Thickness = 1,
-    Transparency = 0.35,
-    ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+	Color = C.Stroke,
+	Thickness = 1,
+	ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+	Transparency = 0.2,
 }, panel)
 
---// A) HEADER (drag handle)
+--==============================================================
+-- 4. HEADER
+--==============================================================
 local header = new("Frame", {
-    Name = "Header",
-    BackgroundColor3 = T.Header,
-    BorderSizePixel = 0,
-    Size = UDim2.new(1, 0, 0, HEADER_H),
-    ZIndex = 3,
+	Name = "Header",
+	Size = UDim2.new(1, 0, 0, HEADER_H),
+	BackgroundColor3 = C.HeaderTop,
+	BorderSizePixel = 0,
+	ZIndex = 3,
 }, panel)
-corner(header, 6)
+new("UICorner", { CornerRadius = UDim.new(0, 10) }, header)
 new("UIGradient", {
-    Color = ColorSequence.new(T.HeaderTop, T.Panel),
-    Rotation = 90,
+	Color = ColorSequence.new(C.HeaderTop, C.HeaderBottom),
+	Rotation = 90,
 }, header)
+
+new("Frame", { -- foot: squares off the bottom corners of the header
+	Name = "Foot",
+	Position = UDim2.new(0, 0, 1, -10),
+	Size = UDim2.new(1, 0, 0, 10),
+	BackgroundColor3 = C.HeaderBottom,
+	BorderSizePixel = 0,
+	ZIndex = 3,
+}, header)
+
 new("Frame", {
-    Name = "HeaderFoot",
-    BackgroundColor3 = T.Panel,
-    BorderSizePixel = 0,
-    AnchorPoint = Vector2.new(0, 1),
-    Position = UDim2.new(0, 0, 1, 0),
-    Size = UDim2.new(1, 0, 0, 6),
-    ZIndex = 2,
-}, header)
-new("Frame", {
-    Name = "HeaderLine",
-    BackgroundColor3 = Color3.fromHex("17171F"),
-    BorderSizePixel = 0,
-    AnchorPoint = Vector2.new(0, 1),
-    Position = UDim2.new(0, 0, 1, 0),
-    Size = UDim2.new(1, 0, 0, 1),
-    ZIndex = 4,
+	Name = "Line",
+	Position = UDim2.new(0, 0, 1, -1),
+	Size = UDim2.new(1, 0, 0, 1),
+	BackgroundColor3 = C.Line,
+	BorderSizePixel = 0,
+	ZIndex = 4,
 }, header)
 
-local brand = font(new("TextLabel", {
-    Name = "Brand",
-    BackgroundTransparency = 1,
-    Text = "gw.cc",
-    TextColor3 = T.TextPrimary,
-    TextXAlignment = Enum.TextXAlignment.Left,
-    AnchorPoint = Vector2.new(0, 0.5),
-    Position = UDim2.new(0, 12, 0.5, 0),
-    Size = UDim2.new(0, 120, 1, 0),
-    ZIndex = 5,
-}, header), 18, Enum.FontWeight.Medium)
+new("TextLabel", {
+	Name = "Brand",
+	Position = UDim2.new(0, 14, 0, 0),
+	Size = UDim2.new(0.5, 0, 1, 0),
+	BackgroundTransparency = 1,
+	Font = Enum.Font.GothamBold,
+	Text = "PANEL",
+	TextSize = 14,
+	TextColor3 = C.TextPrimary,
+	TextTransparency = 0,
+	TextXAlignment = Enum.TextXAlignment.Left,
+	ZIndex = 5,
+}, header)
 
-local hint = font(new("TextLabel", {
-    Name = "Hint",
-    BackgroundTransparency = 1,
-    Text = "RightShift to toggle",
-    TextColor3 = T.TextHint,
-    TextXAlignment = Enum.TextXAlignment.Right,
-    AnchorPoint = Vector2.new(1, 0.5),
-    Position = UDim2.new(1, -12, 0.5, 0),
-    Size = UDim2.new(0, 180, 1, 0),
-    ZIndex = 5,
-    Visible = IS_PC,
-}, header), 11)
+new("TextLabel", {
+	Name = "Hint",
+	AnchorPoint = Vector2.new(1, 0),
+	Position = UDim2.new(1, -48, 0, 0),
+	Size = UDim2.new(0.5, -60, 1, 0),
+	BackgroundTransparency = 1,
+	Font = Enum.Font.Gotham,
+	Text = "RightControl to toggle",
+	TextSize = 11,
+	TextColor3 = C.TextMuted,
+	TextTransparency = 0,
+	TextXAlignment = Enum.TextXAlignment.Right,
+	ZIndex = 5,
+}, header)
 
---// B) BODY
+--==============================================================
+-- 5. BODY
+--==============================================================
 local body = new("Frame", {
-    Name = "Body",
-    BackgroundTransparency = 1,
-    Position = UDim2.new(0, 0, 0, HEADER_H),
-    Size = UDim2.new(1, 0, 1, -HEADER_H),
+	Name = "Body",
+	Position = UDim2.new(0, 0, 0, HEADER_H),
+	Size = UDim2.new(1, 0, 1, -HEADER_H),
+	BackgroundColor3 = C.PanelBG,
+	BorderSizePixel = 0,
+	ZIndex = 3,
 }, panel)
 
---// LEFT COLUMN: SIDE NAV
-local navColumn = new("Frame", {
-    Name = "Nav",
-    BackgroundColor3 = T.NavColumn,
-    BorderSizePixel = 0,
-    Size = UDim2.new(0, NAV_W, 1, 0),
+--==============================================================
+-- 6. NAV COLUMN
+--==============================================================
+local nav = new("Frame", {
+	Name = "Nav",
+	Size = UDim2.new(0, NAV_W, 1, 0),
+	BackgroundColor3 = C.NavInactive,
+	BorderSizePixel = 0,
+	ZIndex = 4,
 }, body)
-corner(navColumn, 6)
-new("Frame", {
-    Name = "NavTopFill",
-    BackgroundColor3 = T.NavColumn,
-    BorderSizePixel = 0,
-    Size = UDim2.new(1, 0, 0, 8),
-}, navColumn)
 
-local NAV_BTN = math.max(44, NAV_W)
-local tabs = { "M", "V", "C" }
-local tabTitles = { M = "Main", V = "Visual", C = "Config/Settings" }
+new("Frame", {
+	Name = "TopFill",
+	Size = UDim2.new(1, 0, 0, 4),
+	BackgroundColor3 = C.NavInactive,
+	BorderSizePixel = 0,
+	ZIndex = 4,
+}, nav)
+
+local TABS = { "M", "V", "C" }
 local navButtons, navAccents = {}, {}
+
+for i, id in ipairs(TABS) do
+	local btn = new("TextButton", {
+		Name = "Nav_" .. id,
+		Position = UDim2.new(0, 0, 0, 4 + (i - 1) * NAV_BTN_H),
+		Size = UDim2.new(1, 0, 0, NAV_BTN_H),
+		BackgroundColor3 = C.NavInactive,
+		BorderSizePixel = 0,
+		AutoButtonColor = false,
+		Font = Enum.Font.GothamBold,
+		Text = id,
+		TextSize = NAV_TEXT,
+		TextColor3 = C.TextMuted,
+		TextTransparency = 0,
+		ZIndex = 5,
+	}, nav)
+
+	local accent = new("Frame", {
+		Name = "Accent",
+		Size = UDim2.new(0, 3, 1, -14),
+		Position = UDim2.new(0, 0, 0, 7),
+		BackgroundColor3 = C.Accent,
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		ZIndex = 6,
+	}, btn)
+	new("UICorner", { CornerRadius = UDim.new(1, 0) }, accent)
+
+	navButtons[id] = btn
+	navAccents[id] = accent
+end
+
+--==============================================================
+-- 7. CONTENT + PAGES
+--==============================================================
+local content = new("ScrollingFrame", {
+	Name = "Content",
+	Position = UDim2.new(0, NAV_W, 0, 0),
+	Size = UDim2.new(1, -NAV_W, 1, 0),
+	BackgroundTransparency = 1,
+	BorderSizePixel = 0,
+	CanvasSize = UDim2.new(0, 0, 0, 0),
+	ScrollBarThickness = 3,
+	ScrollBarImageColor3 = C.Accent,
+	ScrollBarImageTransparency = 0.4,
+	ZIndex = 4,
+}, body)
+
+local pages = {}
+local PAGE_TEXT = {
+	Intro = "Ready.",
+	M     = "Main",
+	V     = "Visuals",
+	C     = "Config",
+}
+
+for _, id in ipairs({ "Intro", "M", "V", "C" }) do
+	local page = new("Frame", {
+		Name = "Page_" .. id,
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		Visible = false,                      -- ALL pages start hidden
+		ZIndex = 5,
+	}, content)
+
+	new("TextLabel", {
+		Name = "Label",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.new(1, -24, 0, 26),
+		BackgroundTransparency = 1,
+		Font = Enum.Font.GothamMedium,
+		Text = PAGE_TEXT[id],
+		TextSize = 15,
+		TextColor3 = C.TextPrimary,
+		TextTransparency = 0,                 -- never 1
+		ZIndex = 6,
+	}, page)
+
+	pages[id] = page
+end
+
+--==============================================================
+-- 8. MINIMIZE BUTTON
+--==============================================================
+local minBtn = new("TextButton", {
+	Name = "Minimize",
+	AnchorPoint = Vector2.new(1, 0.5),
+	Position = UDim2.new(1, -12, 0.5, 0),
+	Size = UDim2.fromOffset(26, 26),
+	BackgroundColor3 = C.NavActive,
+	BorderSizePixel = 0,
+	AutoButtonColor = false,
+	Text = "",
+	ZIndex = 6,
+}, header)
+new("UICorner", { CornerRadius = UDim.new(0, 6) }, minBtn)
+new("UIGradient", {
+	Color = ColorSequence.new(Color3.fromRGB(26, 26, 36), Color3.fromRGB(20, 20, 26)),
+	Rotation = 90,
+}, minBtn)
+new("UIStroke", { Color = C.Stroke, Thickness = 1, Transparency = 0.3 }, minBtn)
+
+local iconTop = new("Frame", {
+	Name = "IconTop",
+	AnchorPoint = Vector2.new(0.5, 0.5),
+	Position = UDim2.fromScale(0.5, 0.42),
+	Size = UDim2.fromOffset(12, 2),
+	BackgroundColor3 = C.TextPrimary,
+	BorderSizePixel = 0,
+	ZIndex = 7,
+}, minBtn)
+local iconBottom = new("Frame", {
+	Name = "IconBottom",
+	AnchorPoint = Vector2.new(0.5, 0.5),
+	Position = UDim2.fromScale(0.5, 0.62),
+	Size = UDim2.fromOffset(12, 2),
+	BackgroundColor3 = C.TextMuted,
+	BorderSizePixel = 0,
+	ZIndex = 7,
+}, minBtn)
+
+--==============================================================
+-- 9. EVENTS
+--==============================================================
 local activeTab = "M"
 local firstLoad = true
 
-for i, id in ipairs(tabs) do
-    local btn = font(new("TextButton", {
-        Name = "Nav_" .. id,
-        AutoButtonColor = false,
-        BackgroundColor3 = T.NavInactive,
-        BackgroundTransparency = 0,
-        BorderSizePixel = 0,
-        Text = id,
-        TextColor3 = T.TextMuted,
-        Position = UDim2.new(0, 0, 0, (i - 1) * NAV_BTN),
-        Size = UDim2.new(1, 0, 0, NAV_BTN),
-    }, navColumn), IS_MOBILE and 18 or 16, Enum.FontWeight.Medium)
-    corner(btn, 4)
-
-    local accent = new("Frame", {
-        Name = "Accent",
-        BackgroundColor3 = T.Accent,
-        BackgroundTransparency = 1,
-        BorderSizePixel = 0,
-        Size = UDim2.new(0, 3, 1, -10),
-        Position = UDim2.new(0, 0, 0, 5),
-        ZIndex = 2,
-    }, btn)
-    corner(accent, 2)
-
-    navButtons[id] = btn
-    navAccents[id] = accent
-end
-
 local function styleNav(id, active)
-    local btn, accent = navButtons[id], navAccents[id]
-    local info = TI(0.25, QUINT, Enum.EasingDirection.Out)
-    TweenService:Create(btn, info, {
-        BackgroundColor3 = active and T.NavActive or T.NavInactive,
-        TextColor3 = active and T.TextPrimary or T.TextMuted,
-    }):Play()
-    TweenService:Create(accent, info, { BackgroundTransparency = active and 0 or 1 }):Play()
+	local btn, accent = navButtons[id], navAccents[id]
+	if not btn then return end
+	btn.BackgroundColor3 = active and C.NavActive or C.NavInactive
+	btn.TextColor3       = active and C.TextPrimary or C.TextMuted
+	accent.BackgroundTransparency = active and 0 or 1
 end
 
---// RIGHT COLUMN: CONTENT
-local content = new("ScrollingFrame", {
-    Name = "Content",
-    BackgroundColor3 = T.Panel,
-    BackgroundTransparency = 0,
-    BorderSizePixel = 0,
-    Position = UDim2.new(0, NAV_W, 0, 0),
-    Size = UDim2.new(1, -NAV_W, 1, 0),
-    CanvasSize = UDim2.new(0, 0, 0, 0),
-    ScrollBarThickness = 4,
-    ScrollBarImageColor3 = T.ScrollBar,
-    ScrollBarImageTransparency = 0.15,
-    ScrollingDirection = Enum.ScrollingDirection.Y,
-    ElasticBehavior = Enum.ElasticBehavior.WhenScrollable,
-    ClipsDescendants = true,
-}, body)
-corner(content, 6)
-new("Frame", {
-    Name = "EdgeFill",
-    BackgroundColor3 = T.Panel,
-    BorderSizePixel = 0,
-    Size = UDim2.new(0, 8, 1, 0),
-    ZIndex = 0,
-}, content)
+local function selectTab(id)
+	if firstLoad then
+		firstLoad = false
+		pages.Intro.Visible = false
+		pages[id].Visible = true
+		activeTab = id
+		for _, t in ipairs(TABS) do styleNav(t, t == id) end
+		return
+	end
 
-local pages = {}
-local function makePage(name, text)
-    local page = new("Frame", {
-        Name = "Page_" .. name,
-        BackgroundTransparency = 1,
-        Size = UDim2.new(1, 0, 1, 0),
-        Visible = false,
-    }, content)
+	if id == activeTab then return end
 
-    local label = font(new("TextLabel", {
-        Name = "Label",
-        BackgroundTransparency = 1,
-        Text = text,
-        TextColor3 = T.TextPrimary,
-        TextTransparency = 1,
-        TextXAlignment = Enum.TextXAlignment.Center,
-        TextYAlignment = Enum.TextYAlignment.Center,
-        AnchorPoint = Vector2.new(0.5, 0.5),
-        Position = UDim2.fromScale(0.5, 0.5),
-        Size = UDim2.new(1, -20, 0, 24),
-    }, page), 15)
-
-    pages[name] = { frame = page, label = label }
-    return pages[name]
+	pages[activeTab].Visible = false
+	pages[id].Visible = true
+	styleNav(activeTab, false)
+	styleNav(id, true)
+	activeTab = id
 end
 
-local rawName = LocalPlayer.DisplayName
-if rawName == nil or rawName == "" then rawName = LocalPlayer.Name end
-rawName = tostring(rawName):gsub("[^%w%s_%.%-]", "")
-local typedText = "Welcome, " .. rawName .. "!"
-
-local intro = makePage("Intro", "")
-makePage("M", tabTitles.M)
-makePage("V", tabTitles.V)
-makePage("C", tabTitles.C)
-
-local currentPage = intro
-local FADE_OUT = TI(0.2, QUINT, EASE_IN)
-local FADE_IN  = TI(0.2, QUINT, Enum.EasingDirection.Out)
-
-local function showPage(target)
-    if currentPage == target then return end
-    local old = currentPage
-    currentPage = target
-
-    TweenService:Create(old.label, FADE_OUT, { TextTransparency = 1 }):Play()
-    task.delay(0.2, function()
-        if currentPage ~= target then return end
-        old.frame.Visible = false
-    end)
-
-    target.label.TextTransparency = 1
-    target.frame.Visible = true
-    TweenService:Create(target.label, FADE_IN, { TextTransparency = 0 }):Play()
+for _, id in ipairs(TABS) do
+	local btn = navButtons[id]
+	btn.MouseButton1Click:Connect(function() selectTab(id) end)
+	btn.TouchTap:Connect(function() selectTab(id) end)
+	btn.MouseEnter:Connect(function()
+		if id ~= activeTab then btn.BackgroundColor3 = C.NavHover end
+	end)
+	btn.MouseLeave:Connect(function()
+		if id ~= activeTab then btn.BackgroundColor3 = C.NavInactive end
+	end)
 end
 
---// NAV INTERACTION
-for _, id in ipairs(tabs) do
-    local btn = navButtons[id]
-
-    if IS_PC then
-        btn.MouseEnter:Connect(function()
-            if activeTab ~= id then
-                TweenService:Create(btn, TI(0.2, QUAD, Enum.EasingDirection.Out), { BackgroundColor3 = T.NavHover }):Play()
-            end
-        end)
-        btn.MouseLeave:Connect(function()
-            if activeTab ~= id then
-                TweenService:Create(btn, TI(0.2, QUAD, Enum.EasingDirection.Out), { BackgroundColor3 = T.NavInactive }):Play()
-            end
-        end)
-    end
-
-    btn.Activated:Connect(function()
-        if activeTab == id and not firstLoad then return end
-        local previous = activeTab
-        activeTab = id
-        firstLoad = false
-        if previous ~= id then styleNav(previous, false) end
-        styleNav(id, true)
-        showPage(pages[id])
-    end)
-end
-
-styleNav("M", true)
-
---============================================================
--- DRAGGING
---============================================================
-local dragging, dragInput, dragStart, startPos = false, nil, nil, nil
-local panelBasePos = panel.Position
+-- dragging (mouse + touch)
+local dragging, dragStart, startPos = false, nil, nil
 
 header.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1
-        or input.UserInputType == Enum.UserInputType.Touch then
-        dragging = true
-        dragInput = input
-        dragStart = input.Position
-        startPos = panel.Position
-        input.Changed:Connect(function()
-            if input.UserInputState == Enum.UserInputState.End then
-                dragging = false
-                panelBasePos = panel.Position
-            end
-        end)
-    end
+	if input.UserInputType == Enum.UserInputType.MouseButton1
+	or input.UserInputType == Enum.UserInputType.Touch then
+		dragging  = true
+		dragStart = input.Position
+		startPos  = panel.Position
+	end
+end)
+
+header.InputEnded:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1
+	or input.UserInputType == Enum.UserInputType.Touch then
+		dragging = false
+	end
 end)
 
 UserInputService.InputChanged:Connect(function(input)
-    if not dragging or not dragInput then return end
-    if input.UserInputType ~= Enum.UserInputType.MouseMovement
-        and input.UserInputType ~= Enum.UserInputType.Touch then return end
-    local delta = input.Position - dragStart
-    panel.Position = UDim2.new(
-        startPos.X.Scale, startPos.X.Offset + delta.X,
-        startPos.Y.Scale, startPos.Y.Offset + delta.Y
-    )
-    panelBasePos = panel.Position
+	if not dragging then return end
+	if input.UserInputType == Enum.UserInputType.MouseMovement
+	or input.UserInputType == Enum.UserInputType.Touch then
+		local delta = input.Position - dragStart
+		panel.Position = UDim2.new(
+			startPos.X.Scale, startPos.X.Offset + delta.X,
+			startPos.Y.Scale, startPos.Y.Offset + delta.Y
+		)
+	end
 end)
 
---============================================================
--- SHOW / HIDE
---============================================================
-local panelSnap = snapshot(panel)
-applySnap(panelSnap, 1)
+-- keybind (always connected, every platform)
+local booted = false
+UserInputService.InputBegan:Connect(function(input, processed)
+	if processed then return end
+	if input.KeyCode == Enum.KeyCode.RightControl and booted then
+		panel.Visible = not panel.Visible
+	end
+end)
 
-local menuVisible = false
-local animating = false
-local minimizeBtn
-
-local function setMinimizeIconState(open)
-    if not minimizeBtn then return end
-    local icon = minimizeBtn:FindFirstChild("Icon")
-    if not icon then return end
-    TweenService:Create(icon, TI(0.2, QUAD, Enum.EasingDirection.Out), {
-        BackgroundTransparency = open and 0.35 or 0,
-    }):Play()
+-- minimize
+local minimized = false
+local function toggleMinimize()
+	minimized = not minimized
+	body.Visible = not minimized
+	iconBottom.BackgroundTransparency = minimized and 1 or 0
+	panel:TweenSize(
+		minimized and UDim2.fromOffset(PANEL_W, HEADER_H)
+		           or UDim2.fromOffset(PANEL_W, PANEL_H),
+		Enum.EasingDirection.Out, Enum.EasingStyle.Quad, 0.18, true
+	)
 end
+minBtn.MouseButton1Click:Connect(toggleMinimize)
+minBtn.TouchTap:Connect(toggleMinimize)
 
-local function showMenu(duration)
-    if menuVisible or animating then return end
-    animating = true
-    menuVisible = true
-    panel.Visible = true
-    applySnap(panelSnap, 1)
-    panel.Position = panelBasePos + UDim2.fromOffset(0, 24)
-    local info = TI(duration or 0.3, QUINT, Enum.EasingDirection.Out)
-    tweenSnap(panelSnap, info, false)
-    TweenService:Create(panel, info, { Position = panelBasePos }):Play()
-    setMinimizeIconState(true)
-    task.delay(duration or 0.3, function() animating = false end)
-end
+--==============================================================
+-- 10. STYLE "M" AS ACTIVE (before boot)
+--==============================================================
+styleNav("M", true)
+styleNav("V", false)
+styleNav("C", false)
 
-local function hideMenu(duration)
-    if not menuVisible or animating then return end
-    animating = true
-    menuVisible = false
-    panelSnap = snapshot(panel)
-    local info = TI(duration or 0.3, QUINT, EASE_IN)
-    tweenSnap(panelSnap, info, true)
-    TweenService:Create(panel, info, { Position = panelBasePos + UDim2.fromOffset(0, 24) }):Play()
-    setMinimizeIconState(false)
-    task.delay(duration or 0.3, function()
-        panel.Visible = false
-        panel.Position = panelBasePos
-        animating = false
-    end)
-end
-
-local function toggleMenu()
-    if menuVisible then hideMenu() else showMenu() end
-end
-
---// PC KEYBIND
-if IS_PC then
-    ContextActionService:BindAction("gwcc_toggle", function(_, state)
-        if state == Enum.UserInputState.Begin then
-            toggleMenu()
-        end
-        return Enum.ContextActionResult.Sink
-    end, false, Enum.KeyCode.RightShift)
-end
-
---============================================================
--- COMPONENT 3: MOBILE FLOATING TOGGLE
---============================================================
-if IS_MOBILE then
-    minimizeBtn = new("ImageButton", {
-        Name = "Minimize",
-        AutoButtonColor = false,
-        BackgroundColor3 = T.MinA,
-        BackgroundTransparency = 0,
-        BorderSizePixel = 0,
-        Image = "",
-        AnchorPoint = Vector2.new(1, 1),
-        Position = UDim2.new(1, -20, 1, -20),
-        Size = UDim2.fromOffset(44, 44),
-        ZIndex = 30,
-    }, gui)
-    corner(minimizeBtn, 10)
-    shadow(minimizeBtn, 34, 0.6)
-    new("UIGradient", {
-        Color = ColorSequence.new(T.MinA, T.MinB),
-        Rotation = 90,
-    }, minimizeBtn)
-    new("UIStroke", {
-        Color = Color3.fromHex("22222C"),
-        Thickness = 1,
-        Transparency = 0.4,
-    }, minimizeBtn)
-    local scale = new("UIScale", { Scale = 1 }, minimizeBtn)
-
-    local icon = new("Frame", {
-        Name = "Icon",
-        BackgroundColor3 = T.TextMuted,
-        BorderSizePixel = 0,
-        AnchorPoint = Vector2.new(0.5, 0.5),
-        Position = UDim2.new(0.5, 0, 0.5, -4),
-        Size = UDim2.fromOffset(18, 2),
-    }, minimizeBtn)
-    corner(icon, 1)
-    local icon2 = new("Frame", {
-        Name = "Icon2",
-        BackgroundColor3 = T.TextMuted,
-        BorderSizePixel = 0,
-        AnchorPoint = Vector2.new(0.5, 0.5),
-        Position = UDim2.new(0.5, 0, 0.5, 4),
-        Size = UDim2.fromOffset(12, 2),
-    }, minimizeBtn)
-    corner(icon2, 1)
-
-    local qOut = TI(0.2, QUAD, Enum.EasingDirection.Out)
-    minimizeBtn.InputBegan:Connect(function(input)
-        if input.UserInputType ~= Enum.UserInputType.Touch then return end
-        TweenService:Create(scale, TI(0.1, QUAD, Enum.EasingDirection.Out), { Scale = 1.05 }):Play()
-        TweenService:Create(minimizeBtn, qOut, { BackgroundColor3 = T.MinPressed }):Play()
-    end)
-    minimizeBtn.InputEnded:Connect(function(input)
-        if input.UserInputType ~= Enum.UserInputType.Touch then return end
-        TweenService:Create(scale, qOut, { Scale = 1 }):Play()
-        TweenService:Create(minimizeBtn, qOut, { BackgroundColor3 = T.MinA }):Play()
-    end)
-    minimizeBtn.Activated:Connect(toggleMenu)
-end
-
---============================================================
--- BOOT SEQUENCE
---============================================================
-local function typeIntro()
-    intro.frame.Visible = true
-    intro.label.Text = ""
-    intro.label.TextTransparency = 0
-    local built = ""
-    -- FIX: correct grapheme iteration
-    for pos1, pos2 in utf8.graphemes(typedText) do
-        built = built .. typedText:sub(pos1, pos2 - 1)
-        intro.label.Text = built
-        task.wait(0.06)
-    end
-    intro.label.Text = typedText
+--==============================================================
+-- 11. BOOT SEQUENCE
+--==============================================================
+local function setProgress(target, duration)
+	local from = barFill.Size.X.Scale
+	local t = 0
+	while t < duration do
+		t += task.wait()
+		local a = math.clamp(t / duration, 0, 1)
+		local v = from + (target - from) * a
+		barFill.Size = UDim2.new(v, 0, 1, 0)
+		pct.Text = math.floor(v * 100 + 0.5) .. "%"
+	end
+	barFill.Size = UDim2.new(target, 0, 1, 0)
+	pct.Text = math.floor(target * 100 + 0.5) .. "%"
 end
 
 task.spawn(function()
+	-- STEP 1: welcome up, panel hidden
+	welcome.Visible = true
+	panel.Visible   = false
+	task.wait(0.35)
+
+	-- STEP 2-5: progress
+	setProgress(0.25, 0.45)
+	setProgress(0.55, 0.50)
+	setProgress(0.82, 0.40)
+	setProgress(1.00, 0.35)
+	task.wait(0.25)
+
+	-- STEP 6: Intro page visible, then reveal panel
+	pages.Intro.Visible = true
+	panel.Visible = true
+	booted = true
+
+	-- fade the welcome layer out
+	TweenService:Create(welcome, TweenInfo.new(0.3), { BackgroundTransparency = 1 }):Play()
+	for _, d in ipairs(wCenter:GetDescendants()) do
+		if d:IsA("TextLabel") then
+			TweenService:Create(d, TweenInfo.new(0.25), { TextTransparency = 1 }):Play()
+		elseif d:IsA("Frame") then
+			TweenService:Create(d, TweenInfo.new(0.25), { BackgroundTransparency = 1 }):Play()
+		end
+	end
+	task.wait(0.35)
+	welcome:Destroy()
+end)

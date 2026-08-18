@@ -1,16 +1,13 @@
 --[[
-    gw.cc | UI Shell v6.0 — Motion Overhaul
+    gw.cc | UI Shell v6.1 — Optimized Motion
     Written by ENI for LO
     Cross-platform. Pure UI. No game logic.
 
-    Что нового в моушене:
-      * Motion core: твины группируются по объекту и отменяют друг друга (нет "дёргания")
-      * Пружинная физика для scale (press/pop/hover) вместо фиксированного Back
-      * Кроссфейд контента двумя лейблами (реальный overlap, не fade-to-blank)
-      * Shimmer-полоса загрузки + плавный счётчик процентов (spring-follow)
-      * FAB: idle-дыхание, морф иконки в X, инерция и снап к краю экрана
-      * Реверсивная stagger-анимация на закрытие, blur + dim бэкдроп
-      * MOTION.reduce = true — режим "меньше движения" для слабых девайсов
+    v6.1 optimizations:
+      * Spring pool: 1 RenderStepped for ALL springs (was N coroutines)
+      * Glow cancel on hide + restart on show
+      * Consolidated loading RenderStepped (1 instead of 2-3)
+      * Clean protection loop
 --]]
 
 local Players            = game:GetService("Players")
@@ -30,13 +27,13 @@ uiParent = uiParent or LocalPlayer:WaitForChild("PlayerGui")
 -- MOTION CONFIG
 --============================================================
 local MOTION = {
-    speed      = 1.0,    -- <1 быстрее, >1 медленнее
-    reduce     = false,  -- true = без stagger/idle/shimmer
-    blur       = true,   -- размытие фона при открытом меню
-    dim        = true,   -- затемнение позади панели
+    speed      = 1.0,
+    reduce     = false,
+    blur       = true,
+    dim        = true,
     shimmer    = true,
     idleFloat  = true,
-    edgeSnap   = true,   -- FAB липнет к краю экрана
+    edgeSnap   = true,
 }
 
 --============================================================
@@ -83,23 +80,19 @@ local function ti(dur, style, dir)
     )
 end
 
--- Пресеты кривых: одно место правки для всего "чувства" интерфейса
 local E = {
-    micro  = function() return ti(0.14, ES.Quad,  ED.Out)   end, -- hover/цвет
-    snap   = function() return ti(0.22, ES.Quint, ED.Out)   end, -- клики
-    smooth = function() return ti(0.34, ES.Quint, ED.Out)   end, -- панели
-    slow   = function() return ti(0.52, ES.Quint, ED.Out)   end, -- вход
-    exit   = function() return ti(0.20, ES.Quint, ED.In)    end, -- выход
+    micro  = function() return ti(0.14, ES.Quad,  ED.Out)   end,
+    snap   = function() return ti(0.22, ES.Quint, ED.Out)   end,
+    smooth = function() return ti(0.34, ES.Quint, ED.Out)   end,
+    slow   = function() return ti(0.52, ES.Quint, ED.Out)   end,
+    exit   = function() return ti(0.20, ES.Quint, ED.In)    end,
     soft   = function() return ti(0.40, ES.Sine,  ED.InOut) end,
 }
 
 local Motion = {}
-Motion._reg    = setmetatable({}, { __mode = "k" })
-Motion._sprg   = setmetatable({}, { __mode = "k" })
-Motion._conns  = {}
+Motion._reg = setmetatable({}, { __mode = "k" })
 
--- Твин с групповой отменой: новый твин в группе "scale" убивает старый твин "scale",
--- но не трогает "color". Именно это лечит дрожание при быстрых кликах.
+-- Твин с групповой отменой
 function Motion.to(obj, group, info, props)
     if not obj then return end
     local reg = Motion._reg[obj]
@@ -117,9 +110,10 @@ function Motion.kill(obj, group)
     if reg and reg[group] then reg[group]:Cancel(); reg[group] = nil end
 end
 
--- Критически задемпфированная пружина для UIScale.
--- Даёт живой overshoot с сохранением скорости при повторных нажатиях,
--- чего TweenService в принципе не умеет.
+-- ====== SPRING POOL: 1 RenderStepped for ALL springs ======
+local springPool = {}
+local springConn
+
 function Motion.spring(scaleObj, target, opts)
     if not scaleObj then return end
     opts = opts or {}
@@ -127,38 +121,48 @@ function Motion.spring(scaleObj, target, opts)
         Motion.to(scaleObj, "scale", E.snap(), { Scale = target })
         return
     end
-    local st = Motion._sprg[scaleObj]
+    local st = springPool[scaleObj]
     if st then
-        st.target    = target
-        st.stiffness = opts.stiffness or st.stiffness
-        st.damping   = opts.damping   or st.damping
+        st.target = target
+        if opts.stiffness then st.stiffness = opts.stiffness end
+        if opts.damping then st.damping = opts.damping end
         if opts.impulse then st.vel = st.vel + opts.impulse end
-        return
+    else
+        springPool[scaleObj] = {
+            target = target,
+            vel = opts.impulse or 0,
+            stiffness = opts.stiffness or 260,
+            damping = opts.damping or 22,
+        }
     end
-    st = {
-        target    = target,
-        vel       = opts.impulse or 0,
-        stiffness = opts.stiffness or 260,
-        damping   = opts.damping or 22,
-    }
-    Motion._sprg[scaleObj] = st
-    task.spawn(function()
-        while scaleObj.Parent do
-            local dt = math.min(RunService.RenderStepped:Wait(), 1 / 30)
-            local x  = scaleObj.Scale
-            local a  = (st.target - x) * st.stiffness - st.vel * st.damping
-            st.vel  = st.vel + a * dt
-            scaleObj.Scale = x + st.vel * dt
-            if math.abs(st.target - scaleObj.Scale) < 0.0015 and math.abs(st.vel) < 0.02 then
-                scaleObj.Scale = st.target
-                break
+    if not springConn then
+        springConn = RunService.RenderStepped:Connect(function(dt)
+            dt = math.min(dt, 1 / 30)
+            local alive = 0
+            for obj, st in pairs(springPool) do
+                if not obj.Parent then
+                    springPool[obj] = nil
+                else
+                    local x = obj.Scale
+                    local a = (st.target - x) * st.stiffness - st.vel * st.damping
+                    st.vel = st.vel + a * dt
+                    obj.Scale = x + st.vel * dt
+                    if math.abs(st.target - obj.Scale) < 0.0015 and math.abs(st.vel) < 0.02 then
+                        obj.Scale = st.target
+                        springPool[obj] = nil
+                    else
+                        alive = alive + 1
+                    end
+                end
             end
-        end
-        Motion._sprg[scaleObj] = nil
-    end)
+            if alive == 0 then
+                springConn:Disconnect()
+                springConn = nil
+            end
+        end)
+    end
 end
 
--- Нажатие: сжатие + пружинный отскок одним вызовом, без task.delay-цепочек
 function Motion.press(scaleObj, depth)
     if not scaleObj then return end
     scaleObj.Scale = 1 - (depth or 0.16)
@@ -218,7 +222,6 @@ local function addScale(parent, v)
     return new("UIScale", { Scale = v or 1 }, parent)
 end
 
--- Снимок прозрачностей: позволяет корректно гасить И восстанавливать поддерево
 local function snapshot(root)
     local snap = {}
     local all = root:GetDescendants()
@@ -275,16 +278,15 @@ local gui = new("ScreenGui", {
     ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
 }, uiParent)
 
+-- Clean protection loop
 task.spawn(function()
-    while gui.Parent ~= nil or true do
-        task.wait(1)
-        if not gui or not gui:IsDescendantOf(game) then break end
+    while task.wait(1) do
         if not gui.Parent then gui.Parent = uiParent end
         if not gui.Enabled then gui.Enabled = true end
     end
 end)
 
--- Backdrop dim (не перехватывает ввод: Active = false)
+-- Backdrop dim
 local dim = new("Frame", {
     Name = "Dim",
     BackgroundColor3 = Color3.new(0, 0, 0),
@@ -360,7 +362,6 @@ local barFill = new("Frame", {
 corner(barFill, 3)
 new("UIGradient", { Color = ColorSequence.new(C.BarA, C.BarB), Rotation = 0 }, barFill)
 
--- Shimmer: бегущий блик поверх заполнения
 local shimmer = new("Frame", {
     Name = "Shimmer", BackgroundColor3 = Color3.fromRGB(200, 200, 235),
     BackgroundTransparency = 1, BorderSizePixel = 0,
@@ -461,7 +462,6 @@ for i, id in ipairs(TABS) do
     }, nav)
     corner(btn, 6)
 
-    -- Акцент растёт от центра в обе стороны — читается мягче, чем сверху вниз
     local acc = new("Frame", {
         Name = "Accent", BackgroundColor3 = C.Accent, BackgroundTransparency = 1,
         BorderSizePixel = 0, AnchorPoint = Vector2.new(0, 0.5),
@@ -478,6 +478,27 @@ new("Frame", {
     Size = UDim2.new(0, 1, 1, 0), ZIndex = 2,
 }, nav)
 
+-- Helper: start glow on a nav accent
+local function startGlow(id)
+    if navGlow[id] then return end
+    local acc = navAccs[id]
+    if not acc or MOTION.reduce then return end
+    navGlow[id] = TweenService:Create(
+        acc, TweenInfo.new(1.7, ES.Sine, ED.InOut, -1, true),
+        { BackgroundColor3 = C.AccentH }
+    )
+    navGlow[id]:Play()
+end
+
+-- Helper: stop glow on a nav accent
+local function stopGlow(id)
+    if navGlow[id] then
+        navGlow[id]:Cancel()
+        navGlow[id] = nil
+        if navAccs[id] then navAccs[id].BackgroundColor3 = C.Accent end
+    end
+end
+
 local function styleNav(id, active)
     local btn, acc, scl = navBtns[id], navAccs[id], navScales[id]
     if not btn then return end
@@ -487,7 +508,7 @@ local function styleNav(id, active)
         TextColor3       = active and C.TxtPri or C.TxtMut,
     })
 
-    if navGlow[id] then navGlow[id]:Cancel(); navGlow[id] = nil end
+    stopGlow(id)
 
     if active then
         Motion.kill(acc, "glow")
@@ -498,11 +519,7 @@ local function styleNav(id, active)
         Motion.spring(scl, 1, { impulse = 0.85, stiffness = 300, damping = 17 })
         if grow and not MOTION.reduce then
             grow.Completed:Once(function()
-                navGlow[id] = TweenService:Create(
-                    acc, TweenInfo.new(1.7, ES.Sine, ED.InOut, -1, true),
-                    { BackgroundColor3 = C.AccentH }
-                )
-                navGlow[id]:Play()
+                startGlow(id)
             end)
         end
     else
@@ -510,7 +527,6 @@ local function styleNav(id, active)
             BackgroundTransparency = 1,
             Size = UDim2.new(0, 3, 0, 0),
         })
-        acc.BackgroundColor3 = C.Accent
         Motion.spring(scl, 1)
     end
 end
@@ -522,7 +538,6 @@ local content = new("Frame", {
 }, body)
 corner(content, 10)
 
--- Два лейбла для настоящего кроссфейда
 local function mkContentLabel()
     return new("TextLabel", {
         BackgroundTransparency = 1, Text = "", TextColor3 = C.TxtPri, TextTransparency = 1,
@@ -561,7 +576,7 @@ local firstLoad   = true
 local firstShow   = true
 local typing      = false
 local menuVisible = false
-local typeIntro -- forward declare
+local typeIntro
 
 --============================================================
 -- FLOATING TOGGLE (FAB)
@@ -595,7 +610,6 @@ local icon2 = new("Frame", {
 }, minBtn)
 corner(icon2, 1)
 
--- Морф "гамбургер → X" синхронно с открытием панели
 local function morphIcon(open)
     local info = ti(0.34, ES.Back, ED.Out)
     if open then
@@ -619,7 +633,6 @@ local function morphIcon(open)
     end
 end
 
--- Idle-дыхание: FAB чуть покачивается, чтобы не выглядеть мёртвым
 local idleFloat
 local function startIdle()
     if not MOTION.idleFloat or MOTION.reduce or idleFloat then return end
@@ -656,7 +669,6 @@ local function showPanelAnimated()
         Motion.to(panel, "pos", ti(0.5, ES.Quint, ED.Out), { Position = panelTargetPos })
         Motion.to(panel, "rot", ti(0.6, ES.Quint, ED.Out), { Rotation = 0 })
 
-        -- Хедер уезжает вниз из-под края
         header.Position = UDim2.new(0, 0, 0, -HH)
         Motion.to(header, "pos", ti(0.45, ES.Quint, ED.Out), { Position = UDim2.new(0, 0, 0, 0) })
         brand.TextTransparency, hint.TextTransparency = 1, 1
@@ -684,8 +696,11 @@ local function showPanelAnimated()
         Motion.spring(panelScale, 1, { stiffness = 260, damping = 18 })
         Motion.to(panel, "pos", E.smooth(), { Position = panelTargetPos })
         Motion.to(panel, "rot", E.smooth(), { Rotation = 0 })
-        -- Лёгкий "re-entry" акцент на активной вкладке
         Motion.spring(navScales[activeTab], 1, { impulse = 0.5 })
+        -- Restart glow on active tab
+        task.delay(0.15, function()
+            if menuVisible then startGlow(activeTab) end
+        end)
     end
 end
 
@@ -693,6 +708,11 @@ local function hidePanelAnimated()
     menuVisible = false
     setBackdrop(false)
     morphIcon(false)
+
+    -- Stop all glow loops (optimization: don't run when hidden)
+    for id, _ in pairs(navGlow) do
+        stopGlow(id)
+    end
 
     Motion.to(pShadow, "fade", E.exit(), { ImageTransparency = 0.9 })
     Motion.to(pStroke, "stroke", E.exit(), { Color = C.StrkClr, Transparency = 0.3 })
@@ -760,7 +780,6 @@ local function startDrag(input)
         dragging = true
         dragStart = input.Position
         startPos = panel.Position
-        -- "Подъём" панели: чуть больше и с более глубокой тенью
         Motion.spring(panelScale, 1.015, { stiffness = 260, damping = 26 })
         Motion.to(pShadow, "drag", E.smooth(), { ImageTransparency = 0.35 })
     end
@@ -808,7 +827,6 @@ UserInputService.InputEnded:Connect(function(input)
             toggleMenu()
             Motion.spring(minScale, 1, { impulse = 1.1 })
         else
-            -- Инерция + прилипание к ближайшему краю
             local vp = vpSize()
             local pad = FAB / 2 + 14
             local projected = fabPos + minVel * 0.12
@@ -868,7 +886,7 @@ UserInputService.InputBegan:Connect(function(input, processed)
 end)
 
 --============================================================
--- TYPING (variable cadence + живой курсор)
+-- TYPING
 --============================================================
 function typeIntro()
     typing = true
@@ -922,13 +940,13 @@ end
 task.spawn(function()
     local conns = {}
     local ok, err = pcall(function()
-        -- Вход welcome-окна
+        -- Welcome entrance
         Motion.spring(welcomeScale, 1, { stiffness = 190, damping = 17 })
         Motion.to(welcome, "pos", ti(0.5, ES.Quint, ED.Out), { Position = welcomeTargetPos })
         Motion.to(welcome, "rot", ti(0.6, ES.Quint, ED.Out), { Rotation = 0 })
         Motion.to(wShadow, "fade", E.slow(), { ImageTransparency = 0.5 })
 
-        -- Stagger содержимого
+        -- Stagger content
         Motion.stagger({ wTitle, wCredit, barBack, wPct }, 0.08, 0.12, function(obj)
             if obj == barBack then
                 Motion.to(obj, "fade", E.smooth(), { BackgroundTransparency = 0 })
@@ -948,23 +966,24 @@ task.spawn(function()
             task.delay(0.45, startIdle)
         end)
 
-        -- Плавный счётчик: цифры догоняют полосу пружиной, без рывков на шагах
+        -- ====== CONSOLIDATED RenderStepped: percent counter + shimmer visibility ======
         local shown = 0
         conns[#conns + 1] = RunService.RenderStepped:Connect(function(dt)
             local actual = barFill.Size.X.Scale
             shown = shown + (actual - shown) * math.min(dt * 9, 1)
             wPct.Text = string.format("Loading... %d%%", math.floor(shown * 100 + 0.5))
             wPct.TextColor3 = C.TxtBrt:Lerp(C.BarDone, shown)
+
+            if MOTION.shimmer and not MOTION.reduce then
+                shimmer.BackgroundTransparency = (actual > 0.02) and 0 or 1
+            end
         end)
 
-        -- Shimmer-петля
+        -- Shimmer movement (tween-based, not RenderStepped)
         if MOTION.shimmer and not MOTION.reduce then
-            conns[#conns + 1] = RunService.RenderStepped:Connect(function()
-                shimmer.BackgroundTransparency = (barFill.Size.X.Scale > 0.02) and 0 or 1
-            end)
             task.spawn(function()
-                local w = barBack.AbsoluteSize.X
                 while shimmer.Parent do
+                    local w = barBack.AbsoluteSize.X
                     shimmer.Position = UDim2.new(0, -70, 0, 0)
                     Motion.to(shimmer, "sweep", TweenInfo.new(1.1, ES.Sine, ED.InOut), {
                         Position = UDim2.new(0, (w > 0 and w or WW - 60) + 10, 0, 0),
@@ -974,7 +993,7 @@ task.spawn(function()
             end)
         end
 
-        -- Ступенчатая загрузка
+        -- Stepped loading
         tweenBar(0.15, 0.8); task.wait(0.4 * MOTION.speed)
         tweenBar(0.35, 0.7); task.wait(0.5 * MOTION.speed)
         tweenBar(0.55, 0.8); task.wait(0.4 * MOTION.speed)
@@ -982,7 +1001,7 @@ task.spawn(function()
         tweenBar(0.90, 0.5); task.wait(0.4 * MOTION.speed)
         tweenBar(1.00, 0.4)
 
-        -- Пульс на 100%
+        -- Pulse at 100%
         Motion.to(barFill, "color", E.snap(), { BackgroundColor3 = C.BarDone })
         Motion.press(pctScale, -0.12)
         task.wait(0.3 * MOTION.speed)
@@ -990,7 +1009,7 @@ task.spawn(function()
         for _, c in ipairs(conns) do c:Disconnect() end
         conns = {}
 
-        -- Переход: welcome гаснет, панель входит с перехлёстом
+        -- Transition: welcome fades, panel enters with overlap
         local snap = snapshot(welcome)
         fadeSnapshot(snap, ti(0.35, ES.Quint, ED.In), true)
         Motion.to(welcomeScale, "scale", ti(0.35, ES.Quint, ED.In), { Scale = 0.88 })
@@ -1011,6 +1030,7 @@ end)
 --============================================================
 gui.Destroying:Connect(function()
     stopIdle()
-    for _, t in pairs(navGlow) do pcall(function() t:Cancel() end) end
+    for id, _ in pairs(navGlow) do stopGlow(id) end
+    if springConn then springConn:Disconnect() end
     if blur then pcall(function() blur:Destroy() end) end
 end)

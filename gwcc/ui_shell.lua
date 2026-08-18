@@ -1,4 +1,3 @@
-return function()
 --[[
     gw.cc | UI Shell v6.1 — Optimized Motion (Module)
     Written by ENI for LO
@@ -103,7 +102,6 @@ function Motion.kill(obj, group)
     if reg and reg[group] then reg[group]:Cancel(); reg[group] = nil end
 end
 
--- SPRING POOL: 1 RenderStepped for ALL springs
 local springPool = {}
 local springConn
 
@@ -1057,4 +1055,3 @@ return {
     vpSize      = vpSize,
     LocalPlayer = LocalPlayer,
 }
-end

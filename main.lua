@@ -1,5 +1,5 @@
 --[[
-    gw.cc | UI Shell v3.0
+    gw.cc | UI Shell v4.0
     Written by ENI for LO
     Cross-platform. Pure UI. No game logic.
 --]]
@@ -10,7 +10,11 @@ local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 
 local LocalPlayer = Players.LocalPlayer
-local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+
+-- CRITICAL: use gethui() to survive cutscenes that clear PlayerGui
+local uiParent
+pcall(function() uiParent = gethui() end)
+uiParent = uiParent or LocalPlayer:WaitForChild("PlayerGui")
 
 -- COLORS
 local C = {
@@ -37,6 +41,16 @@ local C = {
     HLne    = Color3.fromRGB(23, 23, 31),
     MinStrk = Color3.fromRGB(34, 34, 44),
 }
+
+-- EASING SHORTCUTS
+local function tInfo(dur, style, dir)
+    return TweenInfo.new(dur, style or Enum.EasingStyle.Quint, dir or Enum.EasingDirection.Out)
+end
+local QUINT = Enum.EasingStyle.Quint
+local QUAD  = Enum.EasingStyle.Quad
+local LINEAR = Enum.EasingStyle.Linear
+local IN    = Enum.EasingDirection.In
+local OUT   = Enum.EasingDirection.Out
 
 -- HELPERS
 local function new(class, props, parent)
@@ -75,6 +89,10 @@ local function borderStroke(parent, color, thick, transp)
     }, parent)
 end
 
+local function addScale(parent, scaleVal)
+    return new("UIScale", { Scale = scaleVal or 1 }, parent)
+end
+
 -- SIZING
 local cam = workspace.CurrentCamera
 local viewport = cam and cam.ViewportSize or Vector2.new(1280, 720)
@@ -89,22 +107,37 @@ local HH   = small and 42 or 42
 local NF   = small and 17 or 16
 local WW   = small and math.clamp(math.floor(screenW * 0.82), 260, 340) or 340
 
--- ROOT — ZIndexBehavior.Sibling fixes the empty content bug!
+-- ROOT
 local gui = new("ScreenGui", {
     Name = "gwcc_UI",
     ResetOnSpawn = false,
     IgnoreGuiInset = true,
     DisplayOrder = 9999,
     ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
-}, PlayerGui)
+}, uiParent)
+
+-- Protect GUI from being disabled/destroyed by game scripts
+task.spawn(function()
+    while true do
+        task.wait(1)
+        if not gui.Parent then
+            gui.Parent = uiParent
+        end
+        if not gui.Enabled then
+            gui.Enabled = true
+        end
+    end
+end)
 
 --============================================================
 -- WELCOME WINDOW
 --============================================================
+local welcomeTargetPos = UDim2.fromScale(0.5, 0.5)
+
 local welcome = new("Frame", {
     Name = "Welcome",
     AnchorPoint = Vector2.new(0.5, 0.5),
-    Position = UDim2.fromScale(0.5, 0.5),
+    Position = welcomeTargetPos + UDim2.fromOffset(0, 25),  -- start 25px below
     Size = UDim2.fromOffset(WW, 170),
     BackgroundColor3 = C.Panel,
     BorderSizePixel = 0,
@@ -113,6 +146,7 @@ local welcome = new("Frame", {
 corner(welcome, 10)
 dropShadow(welcome, 50, 0.5)
 borderStroke(welcome, C.StrkClr, 1, 0.3)
+local welcomeScale = addScale(welcome, 0.88)
 
 local wTitle = new("TextLabel", {
     Name = "Title",
@@ -184,10 +218,12 @@ local wPct = new("TextLabel", {
 --============================================================
 -- MAIN MENU PANEL (CENTERED)
 --============================================================
+local panelTargetPos = UDim2.fromScale(0.5, 0.5)
+
 local panel = new("Frame", {
     Name = "MainMenu",
     AnchorPoint = Vector2.new(0.5, 0.5),
-    Position = UDim2.fromScale(0.5, 0.5),
+    Position = panelTargetPos + UDim2.fromOffset(0, 30),  -- start 30px below
     Size = UDim2.fromOffset(PW, PH),
     BackgroundColor3 = C.Panel,
     BorderSizePixel = 0,
@@ -197,6 +233,7 @@ local panel = new("Frame", {
 corner(panel, 10)
 dropShadow(panel, 70, 0.5)
 borderStroke(panel, C.StrkClr, 1, 0.3)
+local panelScale = addScale(panel, 0.9)
 
 -- HEADER
 local header = new("Frame", {
@@ -293,6 +330,7 @@ local TABS = { "M", "V", "C" }
 local TAB_NAMES = { M = "Main", V = "Visual", C = "Config/Settings" }
 local navBtns = {}
 local navAccs = {}
+local navScales = {}
 
 for i, id in ipairs(TABS) do
     local btn = new("TextButton", {
@@ -324,9 +362,10 @@ for i, id in ipairs(TABS) do
 
     navBtns[id] = btn
     navAccs[id] = acc
+    navScales[id] = addScale(btn, 1)
 end
 
--- Nav separator (between nav and content)
+-- Nav separator
 new("Frame", {
     Name = "NavSep",
     BackgroundColor3 = C.HLne,
@@ -341,7 +380,7 @@ local function styleNav(id, active)
     local btn = navBtns[id]
     local acc = navAccs[id]
     if not btn then return end
-    local info = TweenInfo.new(0.25, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
+    local info = tInfo(0.25, QUINT, OUT)
     TweenService:Create(btn, info, {
         BackgroundColor3 = active and C.NavAct or C.NavIna,
         TextColor3 = active and C.TxtPri or C.TxtMut,
@@ -349,9 +388,7 @@ local function styleNav(id, active)
     TweenService:Create(acc, info, { BackgroundTransparency = active and 0 or 1 }):Play()
 end
 
---============================================================
--- CONTENT AREA (SIMPLIFIED — single TextLabel, no pages!)
---============================================================
+-- CONTENT AREA
 local content = new("Frame", {
     Name = "Content",
     BackgroundColor3 = C.Panel,
@@ -372,10 +409,10 @@ local contentLabel = new("TextLabel", {
     TextXAlignment = Enum.TextXAlignment.Center,
     TextYAlignment = Enum.TextYAlignment.Center,
     Font = Enum.Font.Code,
-    TextSize = 15,
+    TextSize = 18,
     AnchorPoint = Vector2.new(0.5, 0.5),
     Position = UDim2.fromScale(0.5, 0.5),
-    Size = UDim2.new(1, -20, 0, 24),
+    Size = UDim2.new(1, -20, 0, 30),
     ZIndex = 2,
 }, content)
 
@@ -385,21 +422,23 @@ local contentLabel = new("TextLabel", {
 local activeTab = "M"
 local firstLoad = true
 local typing = false
+local menuVisible = false
 
 --============================================================
--- NAV EVENTS
+-- NAV EVENTS (with animations!)
 --============================================================
 for _, id in ipairs(TABS) do
     local btn = navBtns[id]
+    local btnScale = navScales[id]
 
     btn.MouseEnter:Connect(function()
         if activeTab ~= id then
-            TweenService:Create(btn, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { BackgroundColor3 = C.NavHov }):Play()
+            TweenService:Create(btn, tInfo(0.2, QUAD, OUT), { BackgroundColor3 = C.NavHov }):Play()
         end
     end)
     btn.MouseLeave:Connect(function()
         if activeTab ~= id then
-            TweenService:Create(btn, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { BackgroundColor3 = C.NavIna }):Play()
+            TweenService:Create(btn, tInfo(0.2, QUAD, OUT), { BackgroundColor3 = C.NavIna }):Play()
         end
     end)
 
@@ -408,10 +447,24 @@ for _, id in ipairs(TABS) do
         local prev = activeTab
         activeTab = id
         firstLoad = false
-        typing = false  -- stop typing animation if running
+        typing = false
+
+        -- Nav button press animation
+        btnScale.Scale = 0.88
+        TweenService:Create(btnScale, tInfo(0.2, QUINT, OUT), { Scale = 1 }):Play()
+
         if prev ~= id then styleNav(prev, false) end
         styleNav(id, true)
-        contentLabel.Text = TAB_NAMES[id]
+
+        -- Content transition: fade out → change text → fade in
+        task.spawn(function()
+            TweenService:Create(contentLabel, tInfo(0.15, QUINT, IN), { TextTransparency = 1 }):Play()
+            task.wait(0.15)
+            contentLabel.Text = TAB_NAMES[id]
+            contentLabel.TextSize = 15
+            contentLabel.TextTransparency = 1
+            TweenService:Create(contentLabel, tInfo(0.2, QUINT, OUT), { TextTransparency = 0 }):Play()
+        end)
     end)
 end
 
@@ -438,6 +491,7 @@ new("UIGradient", {
     Rotation = 90,
 }, minBtn)
 borderStroke(minBtn, C.MinStrk, 1, 0.4)
+local minScale = addScale(minBtn, 1)
 
 local icon1 = new("Frame", {
     Name = "Icon1",
@@ -462,13 +516,22 @@ local icon2 = new("Frame", {
 corner(icon2, 1)
 
 --============================================================
--- MENU VISIBILITY
+-- MENU VISIBILITY (with animation!)
 --============================================================
-local menuVisible = false
-
 local function toggleMenu()
     menuVisible = not menuVisible
-    panel.Visible = menuVisible
+    if menuVisible then
+        panel.Visible = true
+        panelScale.Scale = 0.88
+        panel.Position = panelTargetPos + UDim2.fromOffset(0, 30)
+        TweenService:Create(panelScale, tInfo(0.35, QUINT, OUT), { Scale = 1 }):Play()
+        TweenService:Create(panel, tInfo(0.35, QUINT, OUT), { Position = panelTargetPos }):Play()
+    else
+        TweenService:Create(panelScale, tInfo(0.25, QUINT, IN), { Scale = 0.88 }):Play()
+        task.delay(0.25, function()
+            panel.Visible = false
+        end)
+    end
 end
 
 --============================================================
@@ -505,7 +568,10 @@ minBtn.InputBegan:Connect(function(input)
         minDragMoved = false
         minDragStart = input.Position
         minStartPos = minBtn.Position
-        TweenService:Create(minBtn, TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { BackgroundColor3 = C.MinP }):Play()
+        -- Press animation: scale + color
+        minScale.Scale = 0.88
+        TweenService:Create(minScale, tInfo(0.15, QUAD, OUT), { Scale = 1 }):Play()
+        TweenService:Create(minBtn, tInfo(0.15, QUAD, OUT), { BackgroundColor3 = C.MinP }):Play()
     end
 end)
 
@@ -516,7 +582,7 @@ UserInputService.InputEnded:Connect(function(input)
     dragging = false
 
     if minDragging then
-        TweenService:Create(minBtn, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { BackgroundColor3 = C.MinA }):Play()
+        TweenService:Create(minBtn, tInfo(0.2, QUAD, OUT), { BackgroundColor3 = C.MinA }):Play()
         if not minDragMoved then
             toggleMenu()
         end
@@ -556,10 +622,10 @@ UserInputService.InputBegan:Connect(function(input, processed)
 end)
 
 --============================================================
--- FADE OUT
+-- FADE OUT HELPER
 --============================================================
 local function fadeOut(root, duration)
-    local info = TweenInfo.new(duration, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
+    local info = tInfo(duration, QUINT, IN)
     local all = root:GetDescendants()
     table.insert(all, 1, root)
     for _, obj in ipairs(all) do
@@ -576,18 +642,19 @@ local function fadeOut(root, duration)
 end
 
 --============================================================
--- TYPING ANIMATION (writes directly to contentLabel)
+-- TYPING ANIMATION
 --============================================================
 local function typeIntro()
     typing = true
     contentLabel.Text = ""
+    contentLabel.TextSize = 18  -- bigger welcome text
     local rawName = LocalPlayer.DisplayName
     if not rawName or rawName == "" then rawName = LocalPlayer.Name end
     rawName = tostring(rawName):gsub("[^%w%s_%.%-]", "")
     local fullText = "Welcome, " .. rawName .. "!"
     local built = ""
     for i = 1, #fullText do
-        if not typing then return end  -- stop if user clicked a tab
+        if not typing then return end
         built = built .. fullText:sub(i, i)
         contentLabel.Text = built
         task.wait(0.06)
@@ -597,10 +664,10 @@ local function typeIntro()
 end
 
 --============================================================
--- BOOT SEQUENCE (stepped loading with pauses, ~7 sec)
+-- BOOT SEQUENCE
 --============================================================
 local function tweenBar(target, dur)
-    TweenService:Create(barFill, TweenInfo.new(dur, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Size = UDim2.new(target, 0, 1, 0) }):Play()
+    TweenService:Create(barFill, tInfo(dur, QUAD, OUT), { Size = UDim2.new(target, 0, 1, 0) }):Play()
     task.wait(dur)
 end
 
@@ -608,7 +675,12 @@ task.spawn(function()
     local conn
 
     local ok, err = pcall(function()
-        -- Heartbeat: update percentage from bar fill size
+        -- WELCOME WINDOW ENTRANCE ANIMATION
+        welcomeScale.Scale = 0.88
+        TweenService:Create(welcomeScale, tInfo(0.4, QUINT, OUT), { Scale = 1 }):Play()
+        TweenService:Create(welcome, tInfo(0.4, QUINT, OUT), { Position = welcomeTargetPos }):Play()
+
+        -- Heartbeat: update percentage
         conn = RunService.Heartbeat:Connect(function()
             local pct = barFill.Size.X.Scale
             wPct.Text = string.format("Loading... %d%%", math.floor(pct * 100 + 0.5))
@@ -639,19 +711,21 @@ task.spawn(function()
 
         if conn then conn:Disconnect() conn = nil end
 
-        -- Show panel
+        -- PANEL ENTRANCE ANIMATION (scale + slide up)
         panel.Visible = true
         menuVisible = true
+        panelScale.Scale = 0.88
+        panel.Position = panelTargetPos + UDim2.fromOffset(0, 30)
+        TweenService:Create(panelScale, tInfo(0.4, QUINT, OUT), { Scale = 1 }):Play()
+        TweenService:Create(panel, tInfo(0.4, QUINT, OUT), { Position = panelTargetPos }):Play()
 
         -- Fade out welcome
         fadeOut(welcome, 0.4)
-
-        -- Destroy welcome after fade
         task.delay(0.5, function()
             welcome:Destroy()
         end)
 
-        -- Type welcome message into content area
+        -- Type welcome message
         typeIntro()
     end)
 

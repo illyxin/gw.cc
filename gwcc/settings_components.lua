@@ -33,7 +33,7 @@ local KNOB_L, KNOB_R = 11, 29
 local SQ_EDGE  = Color3.fromRGB(40, 40, 50)
 local TRACK_BG = Color3.fromRGB(24, 24, 32)
 
--- NEW: Default ESP colors per type
+-- Default colors per type
 local DEFAULT_COLORS = {
     killer    = Color3.fromRGB(255, 0, 0),
     survivor  = Color3.fromRGB(0, 100, 255),
@@ -44,7 +44,7 @@ local DEFAULT_COLORS = {
     zombie    = Color3.fromRGB(128, 0, 128),
 }
 
--- NEW: Global settings table — the ESP module reads from this
+-- Global settings table
 local Settings = {
     esp = {
         killer = {
@@ -91,7 +91,7 @@ local Settings = {
 }
 
 ----------------------------------------------------------------------
--- thin wrappers over the host API (with safe fallbacks)
+-- thin wrappers over the host API
 ----------------------------------------------------------------------
 local new = UI.new or function(class, props, parent)
     local i = Instance.new(class)
@@ -166,7 +166,6 @@ end
 
 local function lighten(c, a) return c:Lerp(Color3.new(1, 1, 1), a) end
 
--- OPTIMIZATION: cache screen offset per picker open instead of per drag move
 local function screenOffset()
     local gui = UI.gui
     if gui and gui.IgnoreGuiInset then return Vector2.new(0, 0) end
@@ -185,7 +184,7 @@ local function isMove(input)
 end
 
 ----------------------------------------------------------------------
--- SHARED: switch (used by Component 1, accordions and the picker)
+-- SHARED: switch
 ----------------------------------------------------------------------
 local function makeSwitch(parent, opts)
     opts = opts or {}
@@ -308,6 +307,7 @@ end
 
 ----------------------------------------------------------------------
 -- COMPONENT 2: ACCORDION
+-- FIX: expand/collapse only on arrow click, not entire header
 ----------------------------------------------------------------------
 local function createAccordion(parent, name, hasToggle, defaultExpanded, textSize)
     local onToggle = (type(hasToggle) == "function") and hasToggle or nil
@@ -320,22 +320,22 @@ local function createAccordion(parent, name, hasToggle, defaultExpanded, textSiz
         ClipsDescendants = true,
     }, parent)
 
-    local header = new("TextButton", {
+    -- Header is now a Frame (not TextButton) — doesn't capture clicks
+    local header = new("Frame", {
         Name = "Header",
-        Text = "",
-        AutoButtonColor = false,
         BackgroundTransparency = 1,
         Size = UDim2.new(1, 0, 0, 36),
         ZIndex = 2,
     }, container)
-    local hsc = scaleOf(header, 1)
 
     local expanded = defaultExpanded and true or false
 
-    local arrow = new("TextLabel", {
+    -- FIX: Arrow is now a TextButton — only it triggers expand/collapse
+    local arrow = new("TextButton", {
         Name = "Arrow",
-        BackgroundTransparency = 1,
         Text = "▼",
+        AutoButtonColor = false,
+        BackgroundTransparency = 1,
         TextColor3 = C.TxtMut,
         Font = FONT,
         TextSize = 10,
@@ -344,6 +344,7 @@ local function createAccordion(parent, name, hasToggle, defaultExpanded, textSiz
         Rotation = expanded and 0 or -90,
         ZIndex = 3,
     }, header)
+    local asc = scaleOf(arrow, 1)
 
     local title = new("TextLabel", {
         Name = "Title",
@@ -447,17 +448,19 @@ local function createAccordion(parent, name, hasToggle, defaultExpanded, textSiz
 
     function acc.refresh() apply(true) end
 
-    header.MouseButton1Click:Connect(function()
-        mpress(hsc, 0.08)
+    -- FIX: Only arrow click triggers expand/collapse
+    arrow.MouseButton1Click:Connect(function()
+        mpress(asc, 0.08)
         acc.setExpanded(not expanded, true)
     end)
 
+    -- Hover effects on arrow only (since header is now a Frame)
     if not TOUCH then
-        header.MouseEnter:Connect(function()
+        arrow.MouseEnter:Connect(function()
             mto(title, "hdrTxt", micro(), { TextColor3 = C.AccentH })
             mto(arrow, "hdrArw", micro(), { TextColor3 = C.TxtPri })
         end)
-        header.MouseLeave:Connect(function()
+        arrow.MouseLeave:Connect(function()
             mto(title, "hdrTxt", micro(), { TextColor3 = C.TxtPri })
             mto(arrow, "hdrArw", micro(), { TextColor3 = C.TxtMut })
         end)
@@ -521,7 +524,6 @@ local function openPicker(cfg)
     if UI.dropShadow then pcall(UI.dropShadow, panel, 30, 0.55) end
     local psc = scaleOf(panel, 0.85)
 
-    -- SV square ------------------------------------------------------
     local sv = new("Frame", {
         Name = "SV",
         BackgroundColor3 = Color3.fromHSV(h, 1, 1),
@@ -577,7 +579,6 @@ local function openPicker(cfg)
         Size = UDim2.fromScale(1, 1), ZIndex = 106,
     }, sv)
 
-    -- hue slider -----------------------------------------------------
     local hueKeys = {}
     for i = 0, 6 do
         table.insert(hueKeys, ColorSequenceKeypoint.new(i / 6, Color3.fromHSV(i / 6, 1, 1)))
@@ -610,7 +611,6 @@ local function openPicker(cfg)
         Size = UDim2.new(1, 0, 1, 12), Position = UDim2.new(0, 0, 0, -6), ZIndex = 105,
     }, hue)
 
-    -- preview + rgb --------------------------------------------------
     local preview = new("Frame", {
         BackgroundColor3 = cfg.color,
         BorderSizePixel = 0,
@@ -633,7 +633,6 @@ local function openPicker(cfg)
         ZIndex = 102,
     }, panel)
 
-    -- enable row -----------------------------------------------------
     local enRow = new("Frame", {
         BackgroundTransparency = 1,
         Position = UDim2.new(0, 12, 0, yEn),
@@ -656,7 +655,6 @@ local function openPicker(cfg)
     local dragging = nil
     local closing = false
 
-    -- OPTIMIZATION: cache screen offset once per picker open
     local cachedOffset = screenOffset()
 
     local function push(smooth)
@@ -1006,54 +1004,43 @@ local function createSlider(parent, name, minV, maxV, default, suffix, onValueCh
     return api
 end
 
--- NEW: ============================================================
+-- ================================================================
 -- HELPER: createESPSection
--- Creates a sub-accordion with standard ESP settings:
---   Name toggle, Distance toggle, (optional Health/Progress),
---   Outline Color setting, Fill Color setting
--- Wires all callbacks to the Settings table
 -- ================================================================
 local function createESPSection(parent, name, defaultColor, hasHealthStatus, hasProgress, settings_ref)
     local acc = createAccordion(parent, name, true, false, 13)
 
-    -- Wire accordion toggle → section enabled state
     if acc.toggle then
         acc.toggle.onToggle = function(on)
             settings_ref.enabled = on
         end
     end
 
-    -- Name
     createToggle(acc.content, "Name", false, function(on)
         settings_ref.name = on
     end, 12)
 
-    -- Distance
     createToggle(acc.content, "Distance", false, function(on)
         settings_ref.distance = on
     end, 12)
 
-    -- Health Status (survivor only)
     if hasHealthStatus then
         createToggle(acc.content, "Health Status", false, function(on)
             settings_ref.healthStatus = on
         end, 12)
     end
 
-    -- Progress (generator only)
     if hasProgress then
         createToggle(acc.content, "Progress", false, function(on)
             settings_ref.progress = on
         end, 12)
     end
 
-    -- Outline Color (enabled by default — outline is the primary visual)
     createColorSetting(acc.content, "Outline Color", defaultColor, true, function(color, enabled)
         settings_ref.outline.color = color
         settings_ref.outline.enabled = enabled
     end, 12)
 
-    -- Fill Color (disabled by default — fill is optional, softer)
     createColorSetting(acc.content, "Fill Color", defaultColor, false, function(color, enabled)
         settings_ref.fill.color = color
         settings_ref.fill.enabled = enabled
@@ -1062,25 +1049,20 @@ local function createESPSection(parent, name, defaultColor, hasHealthStatus, has
     return acc
 end
 
--- NEW: ============================================================
+-- ================================================================
 -- buildVisualTab
--- Creates the complete Visual tab structure inside the content area:
---   ▼ Visuals
---     ▼ Killer Settings    [toggle]
---       Name, Distance, Outline Color, Fill Color
---     ▼ Survivor Settings  [toggle]
---       Name, Distance, Health Status, Outline Color, Fill Color
---     ▼ Pallet Settings    [toggle]
---     ▼ Window Settings    [toggle]
---     ▼ Generator Settings [toggle]
---       Name, Distance, Progress, Outline Color, Fill Color
---     ▼ Hook Settings      [toggle]
---     ▼ Zombie Settings    [toggle]
+--   ▼ ESP
+--     ▼ Killer    [toggle]
+--     ▼ Survivor  [toggle]
+--     ▼ Pallet    [toggle]
+--     ▼ Window    [toggle]
+--     ▼ Generator [toggle]
+--     ▼ Hook      [toggle]
+--     ▼ Zombie    [toggle]
 --   ▼ Render
---     FOV slider, Brightness slider, No-Fog toggle
+--     FOV, Brightness, No-Fog
 -- ================================================================
 local function buildVisualTab(parent, UI)
-    -- Scrolling container for all settings
     local scroll = new("ScrollingFrame", {
         Name = "VisualContent",
         BackgroundTransparency = 1,
@@ -1100,69 +1082,57 @@ local function buildVisualTab(parent, UI)
         Padding = UDim.new(0, 4),
     }, scroll)
 
-    -- Auto-resize canvas when content changes
     layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
         scroll.CanvasSize = UDim2.new(0, 0, 0, layout.AbsoluteContentSize.Y + 10)
     end)
 
-    -- ====== VISUALS ACCORDION (top-level, no toggle) ======
-    local visuals = createAccordion(scroll, "Visuals", false, false, 14)
+    -- ====== ESP ACCORDION (top-level, no toggle) ======
+    local esp = createAccordion(scroll, "ESP", false, false, 14)
 
-    -- Killer Settings
-    createESPSection(visuals.content, "Killer Settings",
+    createESPSection(esp.content, "Killer",
         DEFAULT_COLORS.killer, false, false, Settings.esp.killer)
 
-    -- Survivor Settings (has Health Status)
-    createESPSection(visuals.content, "Survivor Settings",
+    createESPSection(esp.content, "Survivor",
         DEFAULT_COLORS.survivor, true, false, Settings.esp.survivor)
 
-    -- Pallet Settings
-    createESPSection(visuals.content, "Pallet Settings",
+    createESPSection(esp.content, "Pallet",
         DEFAULT_COLORS.pallet, false, false, Settings.esp.pallet)
 
-    -- Window Settings
-    createESPSection(visuals.content, "Window Settings",
+    createESPSection(esp.content, "Window",
         DEFAULT_COLORS.window, false, false, Settings.esp.window)
 
-    -- Generator Settings (has Progress)
-    createESPSection(visuals.content, "Generator Settings",
+    createESPSection(esp.content, "Generator",
         DEFAULT_COLORS.generator, false, true, Settings.esp.generator)
 
-    -- Hook Settings
-    createESPSection(visuals.content, "Hook Settings",
+    createESPSection(esp.content, "Hook",
         DEFAULT_COLORS.hook, false, false, Settings.esp.hook)
 
-    -- Zombie Settings
-    createESPSection(visuals.content, "Zombie Settings",
+    createESPSection(esp.content, "Zombie",
         DEFAULT_COLORS.zombie, false, false, Settings.esp.zombie)
 
     -- ====== RENDER ACCORDION (top-level, no toggle) ======
     local render = createAccordion(scroll, "Render", false, false, 14)
 
-    -- FOV slider
     createSlider(render.content, "FOV", 70, 120, 70, "", function(v)
         Settings.render.fov = v
     end)
 
-    -- Brightness slider
     createSlider(render.content, "Brightness", 0, 100, 50, "%", function(v)
         Settings.render.brightness = v
     end)
 
-    -- No-Fog toggle
     createToggle(render.content, "No-Fog", false, function(on)
         Settings.render.noFog = on
     end, 13)
 
-    -- Expand top-level accordions by default
-    visuals.setExpanded(true, false)
+    esp.setExpanded(true, false)
     render.setExpanded(true, false)
 
     return {
         container = scroll,
         settings  = Settings,
-        visuals  = visuals,
-        render   = render,
+        esp       = esp,
+        render    = render,
     }
 end
 

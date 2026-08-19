@@ -439,7 +439,7 @@ new("Frame", {
 }, nav)
 
 local TABS = { "M", "V", "C" }
-local TAB_NAMES = { M = "Main", V = "Visual", C = "Config/Settings" }
+local TAB_NAMES = { M = "Main", V = "", C = "Config/Settings" }
 local navBtns, navAccs, navScales, navGlow = {}, {}, {}, {}
 
 for i, id in ipairs(TABS) do

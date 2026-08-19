@@ -22,7 +22,7 @@ local TOUCH  = UIS.TouchEnabled and not UIS.MouseEnabled
 local FONT   = Enum.Font.Code
 
 ----------------------------------------------------------------------
--- palette constants (spec-locked)
+-- palette constants
 ----------------------------------------------------------------------
 local TRK_OFF  = Color3.fromRGB(28, 28, 38)
 local TRK_ON   = Color3.fromRGB(60, 60, 90)
@@ -33,7 +33,6 @@ local KNOB_L, KNOB_R = 11, 29
 local SQ_EDGE  = Color3.fromRGB(40, 40, 50)
 local TRACK_BG = Color3.fromRGB(24, 24, 32)
 
--- Default colors per type
 local DEFAULT_COLORS = {
     killer    = Color3.fromRGB(255, 0, 0),
     survivor  = Color3.fromRGB(0, 100, 255),
@@ -44,7 +43,6 @@ local DEFAULT_COLORS = {
     zombie    = Color3.fromRGB(128, 0, 128),
 }
 
--- Global settings table
 local Settings = {
     esp = {
         killer = {
@@ -91,7 +89,7 @@ local Settings = {
 }
 
 ----------------------------------------------------------------------
--- thin wrappers over the host API
+-- wrappers
 ----------------------------------------------------------------------
 local new = UI.new or function(class, props, parent)
     local i = Instance.new(class)
@@ -307,7 +305,6 @@ end
 
 ----------------------------------------------------------------------
 -- COMPONENT 2: ACCORDION
--- FIX: expand/collapse only on arrow click, not entire header
 ----------------------------------------------------------------------
 local function createAccordion(parent, name, hasToggle, defaultExpanded, textSize)
     local onToggle = (type(hasToggle) == "function") and hasToggle or nil
@@ -320,7 +317,6 @@ local function createAccordion(parent, name, hasToggle, defaultExpanded, textSiz
         ClipsDescendants = true,
     }, parent)
 
-    -- Header is now a Frame (not TextButton) — doesn't capture clicks
     local header = new("Frame", {
         Name = "Header",
         BackgroundTransparency = 1,
@@ -330,7 +326,6 @@ local function createAccordion(parent, name, hasToggle, defaultExpanded, textSiz
 
     local expanded = defaultExpanded and true or false
 
-    -- FIX: Arrow is now a TextButton — only it triggers expand/collapse
     local arrow = new("TextButton", {
         Name = "Arrow",
         Text = "▼",
@@ -448,13 +443,11 @@ local function createAccordion(parent, name, hasToggle, defaultExpanded, textSiz
 
     function acc.refresh() apply(true) end
 
-    -- FIX: Only arrow click triggers expand/collapse
     arrow.MouseButton1Click:Connect(function()
         mpress(asc, 0.08)
         acc.setExpanded(not expanded, true)
     end)
 
-    -- Hover effects on arrow only (since header is now a Frame)
     if not TOUCH then
         arrow.MouseEnter:Connect(function()
             mto(title, "hdrTxt", micro(), { TextColor3 = C.AccentH })
@@ -1051,7 +1044,7 @@ end
 
 -- ================================================================
 -- buildVisualTab
---   ▼ ESP
+--   ▼ ESP (collapsed by default)
 --     ▼ Killer    [toggle]
 --     ▼ Survivor  [toggle]
 --     ▼ Pallet    [toggle]
@@ -1059,7 +1052,7 @@ end
 --     ▼ Generator [toggle]
 --     ▼ Hook      [toggle]
 --     ▼ Zombie    [toggle]
---   ▼ Render
+--   ▼ Render (collapsed by default)
 --     FOV, Brightness, No-Fog
 -- ================================================================
 local function buildVisualTab(parent, UI)
@@ -1086,7 +1079,7 @@ local function buildVisualTab(parent, UI)
         scroll.CanvasSize = UDim2.new(0, 0, 0, layout.AbsoluteContentSize.Y + 10)
     end)
 
-    -- ====== ESP ACCORDION (top-level, no toggle) ======
+    -- ====== ESP ACCORDION (top-level, no toggle, collapsed by default) ======
     local esp = createAccordion(scroll, "ESP", false, false, 14)
 
     createESPSection(esp.content, "Killer",
@@ -1110,7 +1103,7 @@ local function buildVisualTab(parent, UI)
     createESPSection(esp.content, "Zombie",
         DEFAULT_COLORS.zombie, false, false, Settings.esp.zombie)
 
-    -- ====== RENDER ACCORDION (top-level, no toggle) ======
+    -- ====== RENDER ACCORDION (top-level, no toggle, collapsed by default) ======
     local render = createAccordion(scroll, "Render", false, false, 14)
 
     createSlider(render.content, "FOV", 70, 120, 70, "", function(v)
@@ -1124,9 +1117,6 @@ local function buildVisualTab(parent, UI)
     createToggle(render.content, "No-Fog", false, function(on)
         Settings.render.noFog = on
     end, 13)
-
-    esp.setExpanded(true, false)
-    render.setExpanded(true, false)
 
     return {
         container = scroll,
